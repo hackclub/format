@@ -104,6 +104,12 @@ function onError(error: Error) {
 
 interface EditorProps {
   onContentChange: (html: string) => void
+  onProcessAndCopy?: () => void
+  transforming?: boolean
+  copied?: boolean
+  hasContent?: boolean
+  hasGmailAccess?: boolean
+  onRequestGmailAccess?: () => void
   initialContent?: string
 }
 
@@ -199,7 +205,7 @@ function PastePlugin() {
   return null
 }
 
-export function Editor({ onContentChange, initialContent }: EditorProps) {
+export function Editor({ onContentChange, onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, onRequestGmailAccess, initialContent }: EditorProps) {
   const initialConfig = {
     namespace: 'FormatEditor',
     theme,
@@ -218,9 +224,18 @@ export function Editor({ onContentChange, initialContent }: EditorProps) {
   }
 
   return (
-    <div className="lexical-editor border rounded-lg">
+    <div className="lexical-editor">
       <LexicalComposer initialConfig={initialConfig}>
-        <EditorToolbar />
+        {/* Floating Toolbar - Bottom Center */}
+        <EditorToolbar 
+          onProcessAndCopy={onProcessAndCopy}
+          transforming={transforming}
+          copied={copied}
+          hasContent={hasContent}
+          hasGmailAccess={hasGmailAccess}
+          onRequestGmailAccess={onRequestGmailAccess}
+        />
+        
         <div className="editor-container">
           <div className="editor-inner">
             <RichTextPlugin

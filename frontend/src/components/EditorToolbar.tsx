@@ -20,6 +20,7 @@ import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $createImageNode } from './ImageNode'
 import { assetsAPI } from '@/lib/api'
+import { LoadingSpinner } from './LoadingSpinner'
 
 interface ToolbarState {
   isBold: boolean
@@ -32,7 +33,16 @@ interface ToolbarState {
   blockType: string
 }
 
-export function EditorToolbar() {
+interface EditorToolbarProps {
+  onProcessAndCopy?: () => void
+  transforming?: boolean
+  copied?: boolean
+  hasContent?: boolean
+  hasGmailAccess?: boolean
+  onRequestGmailAccess?: () => void
+}
+
+export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, onRequestGmailAccess }: EditorToolbarProps) {
   const [editor] = useLexicalComposerContext()
   const [toolbarState, setToolbarState] = useState<ToolbarState>({
     isBold: false,
@@ -113,7 +123,7 @@ export function EditorToolbar() {
   }, [editor, updateToolbar])
 
   const formatText = (format: string) => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format)
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format as any)
   }
 
   const insertLink = () => {
@@ -201,7 +211,7 @@ export function EditorToolbar() {
   }, [])
 
   return (
-    <div className="relative border-b border-gray-200 p-2 flex flex-wrap items-center gap-1 bg-gray-50">
+    <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-10 bg-white border border-gray-300 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
       {/* Format buttons */}
       <button
         onClick={() => formatText('bold')}
@@ -243,7 +253,7 @@ export function EditorToolbar() {
         <s>S</s>
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-4 bg-gray-300" />
 
       {/* List buttons */}
       <button
@@ -266,7 +276,7 @@ export function EditorToolbar() {
         1.
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-4 bg-gray-300" />
 
       {/* Link button */}
       <button
@@ -291,9 +301,46 @@ export function EditorToolbar() {
         {uploading ? '⏳' : '🖼️'}
       </button>
 
+      <div className="w-px h-4 bg-gray-300" />
+
+      {/* Gmail Access Button */}
+      {!hasGmailAccess && onRequestGmailAccess && (
+        <button
+          onClick={onRequestGmailAccess}
+          className="px-3 py-1 rounded text-xs font-medium bg-blue-500 text-white hover:bg-blue-600 border"
+          title="Enable Gmail image auto-fetch"
+        >
+          📧
+        </button>
+      )}
+
+      {/* Copy to Clipboard Button */}
+      {onProcessAndCopy && (
+        <button
+          onClick={onProcessAndCopy}
+          disabled={transforming || !hasContent}
+          className={`px-4 py-1 rounded text-sm font-medium border ${
+            copied ? 'bg-green-100 text-green-800 border-green-300' :
+            transforming ? 'bg-gray-100 text-gray-600 border-gray-300' :
+            'bg-hack-green text-white border-hack-green hover:bg-green-600'
+          }`}
+        >
+          {copied ? (
+            '✅ Copied!'
+          ) : transforming ? (
+            <div className="flex items-center space-x-1">
+              <LoadingSpinner size="sm" />
+              <span>Processing...</span>
+            </div>
+          ) : (
+            '📋 Copy'
+          )}
+        </button>
+      )}
+
       {/* Link input modal */}
       {showLinkInput && (
-        <div className="absolute top-12 left-2 z-10 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+        <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 z-20 bg-white border border-gray-300 rounded-md shadow-lg p-3">
           <form onSubmit={handleLinkSubmit} className="flex flex-col gap-2">
             <input
               type="url"

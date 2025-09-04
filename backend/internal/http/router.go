@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -73,6 +74,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/callback", s.HandleCallback)
 		r.Post("/logout", s.HandleLogout)
 		r.With(s.AuthMiddleware).Get("/me", s.HandleMe)
+
 	})
 
 	// Protected API routes
@@ -86,6 +88,9 @@ func (s *Server) Routes() http.Handler {
 
 		// HTML transformation
 		r.Post("/html/transform", s.HandleHTMLTransform)
+
+		// Gmail API integration
+		r.Post("/gmail/attachment", s.HandleGmailAttachment)
 	})
 
 	return r
@@ -201,8 +206,24 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info().Str("email", user.Email).Str("domain", user.HD).Msg("user logged in")
 
-	// Redirect to frontend
-	http.Redirect(w, r, s.config.AppBaseURL, http.StatusTemporaryRedirect)
+	// Create user session (essential for authentication)
+	err = s.sessionManager.SetUser(w, r, user)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("failed to set user session")
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	// Also pass OAuth tokens to frontend via URL fragment for Gmail API access
+	redirectURL := fmt.Sprintf("%s#access_token=%s&expires_in=3600", 
+		s.config.AppBaseURL, 
+		token.AccessToken)
+	
+	if token.RefreshToken != "" {
+		redirectURL += "&refresh_token=" + token.RefreshToken
+	}
+	
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) HandleLogout(w http.ResponseWriter, r *http.Request) {
@@ -257,4 +278,33 @@ func (s *Server) HandleHTMLTransform(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) HandleGmailAttachment(w http.ResponseWriter, r *http.Request) {
+	_ = r.Context()
+
+	var req struct {
+		MessageID    string `json:"messageId"`
+		AttachmentID string `json:"attachmentId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.MessageID == "" || req.AttachmentID == "" {
+		http.Error(w, "messageId and attachmentId are required", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Implement Gmail API integration
+	// This would require:
+	// 1. Getting user's Gmail OAuth token from session
+	// 2. Creating Gmail API client
+	// 3. Fetching the attachment
+	// 4. Returning the image data
+
+	// For now, return a helpful error
+	http.Error(w, "Gmail API integration not yet implemented - requires gmail.readonly OAuth scope", http.StatusNotImplemented)
 }

@@ -37,7 +37,7 @@ func NewOIDCProvider(ctx context.Context, clientID, clientSecret, redirectURL st
 		ClientSecret: clientSecret,
 		RedirectURL:  redirectURL,
 		Endpoint:     google.Endpoint,
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "https://www.googleapis.com/auth/gmail.readonly"},
 	}
 
 	verifier := provider.Verifier(&oidc.Config{
@@ -58,8 +58,14 @@ func NewOIDCProvider(ctx context.Context, clientID, clientSecret, redirectURL st
 }
 
 func (p *OIDCProvider) GetAuthURL(state string) string {
-	return p.config.AuthCodeURL(state, 
+	scopes := p.config.Scopes
+	fmt.Printf("🔍 OAuth scopes being requested: %v\n", scopes)
+	
+	authURL := p.config.AuthCodeURL(state, 
 		oauth2.SetAuthURLParam("hd", strings.Join(p.getAllowedDomains(), " ")))
+		
+	fmt.Printf("🔗 OAuth URL: %s\n", authURL)
+	return authURL
 }
 
 func (p *OIDCProvider) VerifyIDToken(ctx context.Context, idToken string) (*Claims, error) {

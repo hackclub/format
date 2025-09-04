@@ -24,6 +24,12 @@ type User struct {
 	HD      string `json:"hd"`
 }
 
+type TokenInfo struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresAt    int64  `json:"expires_at,omitempty"`
+}
+
 func NewManager(sessionSecret string) *Manager {
 	store := sessions.NewCookieStore([]byte(sessionSecret))
 	store.Options = &sessions.Options{

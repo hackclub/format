@@ -33,7 +33,10 @@ body {
     sans-serif;
   font-weight: 400;
   text-align: left;
-  border-radius: 8px;
+  border: none;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .lexical-editor .editor-container {
@@ -49,15 +52,17 @@ body {
 }
 
 .lexical-editor .editor-input {
-  min-height: 150px;
+  height: 100vh;
   resize: none;
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.6;
   position: relative;
   tab-size: 1;
   outline: 0;
-  padding: 15px 10px;
+  padding: 40px 60px;
   caret-color: #444;
   transition: border-color 0.2s ease;
+  border: none;
 }
 
 .lexical-editor .editor-input.drag-over {
@@ -70,9 +75,9 @@ body {
   overflow: hidden;
   position: absolute;
   text-overflow: ellipsis;
-  top: 15px;
-  left: 10px;
-  font-size: 15px;
+  top: 40px;
+  left: 60px;
+  font-size: 16px;
   user-select: none;
   display: inline-block;
   pointer-events: none;

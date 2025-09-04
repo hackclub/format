@@ -85,13 +85,13 @@ func (t *Transformer) processImages(ctx context.Context, html string) (string, S
 
 		// Handle blob URLs (Gmail draft images)
 		if strings.HasPrefix(srcURL, "blob:") {
-			messages = append(messages, "Gmail draft images detected - please download and re-upload images manually for rehosting")
+			messages = append(messages, "Gmail draft detected - Use the 🖼️ button to upload images for rehosting")
 			continue
 		}
 
 		// Handle Gmail attachment URLs (require authentication)
 		if strings.Contains(srcURL, "mail.google.com") && strings.Contains(srcURL, "attid=") {
-			messages = append(messages, "Gmail attachment image detected - please download and re-upload manually for rehosting")
+			messages = append(messages, "Gmail attachment detected - Use the 🖼️ button in the toolbar to upload images manually for rehosting")
 			continue
 		}
 

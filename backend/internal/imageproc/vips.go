@@ -58,11 +58,11 @@ func (p *Processor) Process(data []byte, originalContentType string) (*ProcessRe
 	
 	// Log resize decision
 	if needsResize {
-		fmt.Printf("Image resize triggered: %dx%d pixels, %d bytes (max: 3840px or 5MB)\n", 
-			metadata.Size.Width, metadata.Size.Height, originalSize)
+		fmt.Printf("🔄 Image resize triggered: %dx%d pixels, %d bytes (%.1fMB) - max: 3840px or 5MB\n", 
+			metadata.Size.Width, metadata.Size.Height, originalSize, float64(originalSize)/(1024*1024))
 	} else {
-		fmt.Printf("Image resize skipped: %dx%d pixels, %d bytes (within limits)\n",
-			metadata.Size.Width, metadata.Size.Height, originalSize)
+		fmt.Printf("✅ Image resize skipped: %dx%d pixels, %d bytes (%.1fMB) - within limits\n",
+			metadata.Size.Width, metadata.Size.Height, originalSize, float64(originalSize)/(1024*1024))
 	}
 
 	// Create processing options
@@ -84,11 +84,17 @@ func (p *Processor) Process(data []byte, originalContentType string) (*ProcessRe
 	// Decide output format based on alpha channel and transparency
 	shouldConvertToJPEG := util.ShouldConvertToJPEG(originalContentType, hasAlpha && p.hasRealTransparency(data))
 
+	fmt.Printf("🎨 Format decision: %s → %s (hasAlpha: %t, shouldConvert: %t)\n", 
+		originalContentType, 
+		map[bool]string{true: "JPEG", false: "PNG"}[shouldConvertToJPEG],
+		hasAlpha, 
+		shouldConvertToJPEG)
+
 	var processedData []byte
 	var outputContentType string
 
-	if shouldConvertToJPEG {
-		// Convert to JPEG
+	if shouldConvertToJPEG || originalContentType == "image/jpeg" || originalContentType == "image/jpg" {
+		// Convert to JPEG (or keep as JPEG)
 		options.Type = bimg.JPEG
 		processedData, err = bimg.NewImage(data).Process(options)
 		if err != nil {
@@ -96,7 +102,7 @@ func (p *Processor) Process(data []byte, originalContentType string) (*ProcessRe
 		}
 		outputContentType = "image/jpeg"
 	} else {
-		// Keep as PNG
+		// Keep as PNG (only for PNGs with transparency)
 		options.Type = bimg.PNG
 		if p.pngStrip {
 			options.StripMetadata = true

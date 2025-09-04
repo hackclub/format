@@ -10,39 +10,43 @@ export function DragDropPlugin() {
   const [editor] = useLexicalComposerContext()
 
   useEffect(() => {
-    const handleDragOver = (event: DragEvent) => {
-      event.preventDefault()
-      event.dataTransfer!.dropEffect = 'copy'
+    const handleDragOver = (event: Event) => {
+      const dragEvent = event as DragEvent
+      dragEvent.preventDefault()
+      dragEvent.dataTransfer!.dropEffect = 'copy'
     }
 
-    const handleDragEnter = (event: DragEvent) => {
-      event.preventDefault()
-      const target = event.target as HTMLElement
+    const handleDragEnter = (event: Event) => {
+      const dragEvent = event as DragEvent
+      dragEvent.preventDefault()
+      const target = dragEvent.target as HTMLElement
       const editorInput = target.closest('.editor-input')
       if (editorInput) {
         editorInput.classList.add('drag-over')
       }
     }
 
-    const handleDragLeave = (event: DragEvent) => {
-      event.preventDefault()
-      const target = event.target as HTMLElement
+    const handleDragLeave = (event: Event) => {
+      const dragEvent = event as DragEvent
+      dragEvent.preventDefault()
+      const target = dragEvent.target as HTMLElement
       const editorInput = target.closest('.editor-input')
-      if (editorInput && !editorInput.contains(event.relatedTarget as Node)) {
+      if (editorInput && !editorInput.contains(dragEvent.relatedTarget as Node)) {
         editorInput.classList.remove('drag-over')
       }
     }
 
-    const handleDrop = async (event: DragEvent) => {
-      event.preventDefault()
+    const handleDrop = async (event: Event) => {
+      const dragEvent = event as DragEvent
+      dragEvent.preventDefault()
       
-      const target = event.target as HTMLElement
+      const target = dragEvent.target as HTMLElement
       const editorInput = target.closest('.editor-input')
       if (editorInput) {
         editorInput.classList.remove('drag-over')
       }
       
-      const files = Array.from(event.dataTransfer?.files || [])
+      const files = Array.from(dragEvent.dataTransfer?.files || [])
       const imageFiles = files.filter(file => file.type.startsWith('image/'))
       
       if (imageFiles.length === 0) {

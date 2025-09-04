@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+.lexical-editor {
+  position: relative;
+  background: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, '.SFNSText-Regular',
+    sans-serif;
+  font-weight: 400;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.lexical-editor .editor-container {
+  background: #fff;
+  position: relative;
+  cursor: text;
+  display: block;
+}
+
+.lexical-editor .editor-inner {
+  background: #fff;
+  position: relative;
+}
+
+.lexical-editor .editor-input {
+  min-height: 150px;
+  resize: none;
+  font-size: 15px;
+  position: relative;
+  tab-size: 1;
+  outline: 0;
+  padding: 15px 10px;
+  caret-color: #444;
+  transition: border-color 0.2s ease;
+}
+
+.lexical-editor .editor-input.drag-over {
+  border: 2px dashed #3b82f6;
+  background-color: #f0f9ff;
+}
+
+.lexical-editor .editor-placeholder {
+  color: #999;
+  overflow: hidden;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 15px;
+  left: 10px;
+  font-size: 15px;
+  user-select: none;
+  display: inline-block;
+  pointer-events: none;
+}
+
+.lexical-editor .editor-link {
+  color: #1155cc;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lexical-editor .editor-link:hover {
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+.lexical-editor .editor-text-bold {
+  font-weight: bold;
+}
+
+.lexical-editor .editor-text-italic {
+  font-style: italic;
+}
+
+.lexical-editor .editor-text-underline {
+  text-decoration: underline;
+}
+
+.lexical-editor .editor-text-strikethrough {
+  text-decoration: line-through;
+}
+
+.lexical-editor .editor-list-ol {
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+}
+
+.lexical-editor .editor-list-ul {
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.lexical-editor .editor-listitem {
+  margin: 0.25rem 0;
+}
+
+.lexical-editor .editor-nested-listitem {
+  list-style-type: none;
+}
+
+.lexical-editor .editor-quote {
+  border-left: 4px solid #cbd5e0;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #4a5568;
+}
+
+.lexical-editor .editor-heading-h1 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.lexical-editor .editor-heading-h2 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 0.8rem 0 0.4rem 0;
+}
+
+.lexical-editor .editor-heading-h3 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin: 0.6rem 0 0.3rem 0;
+}
+
+.lexical-editor .editor-image,
+.lexical-editor img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+}

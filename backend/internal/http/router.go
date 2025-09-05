@@ -350,10 +350,10 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
 	// Build script tags for the root main files
 	scriptTags := ""
 	if len(manifest.PolyfillFiles) > 0 {
-		scriptTags += fmt.Sprintf(`    <script src="/_next/static/%s" nomodule=""></script>%s`, manifest.PolyfillFiles[0], "\n")
+		scriptTags += fmt.Sprintf(`    <script src="/_next/%s" nomodule=""></script>%s`, manifest.PolyfillFiles[0], "\n")
 	}
 	for _, file := range manifest.RootMainFiles {
-		scriptTags += fmt.Sprintf(`    <script src="/_next/static/%s"></script>%s`, file, "\n")
+		scriptTags += fmt.Sprintf(`    <script src="/_next/%s"></script>%s`, file, "\n")
 	}
 	
 	// Next.js App Router HTML shell with dynamic chunks

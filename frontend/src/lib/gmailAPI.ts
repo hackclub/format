@@ -186,21 +186,25 @@ class GmailAPIClient {
     return null
   }
 
-  private findAttachmentBodyId(part: any, targetAttachmentId: string): string | null {
-    // Check current part
-    if (part.body?.attachmentId === targetAttachmentId) {
-      return part.body.attachmentId
+  private findAttachmentBodyId(part: any, target: string): string | null {
+    // Match the UI's realattid=ii_... against the header
+    const xAtt = part.headers?.find(
+      (h: any) => h.name?.toLowerCase() === 'x-attachment-id'
+    )?.value;
+    if (xAtt && xAtt === target && part.body?.attachmentId) {
+      return part.body.attachmentId;
     }
-
-    // Search in nested parts
+    // Also allow a direct match to body.attachmentId
+    if (part.body?.attachmentId === target) {
+      return part.body.attachmentId;
+    }
     if (part.parts) {
-      for (const subPart of part.parts) {
-        const found = this.findAttachmentBodyId(subPart, targetAttachmentId)
-        if (found) return found
+      for (const sub of part.parts) {
+        const found = this.findAttachmentBodyId(sub, target);
+        if (found) return found;
       }
     }
-
-    return null
+    return null;
   }
 
   clearTokens(): void {

@@ -12,6 +12,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const maxUploadBytes = 128 << 20 // 128MB request body limit
+
 type Handler struct {
 	service *Service
 	logger  zerolog.Logger
@@ -28,18 +30,16 @@ func NewHandler(service *Service, logger zerolog.Logger) *Handler {
 func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Check if this is multipart form data (file upload) or JSON
+	// Enforce body limit
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 	contentType := r.Header.Get("Content-Type")
-	
+
 	if strings.Contains(contentType, "multipart/form-data") {
-		// Handle file upload
-		err := r.ParseMultipartForm(32 << 20) // 32MB max memory
-		if err != nil {
+		if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB in-memory
 			h.logger.Error().Err(err).Msg("failed to parse multipart form")
 			http.Error(w, "Failed to parse form", http.StatusBadRequest)
 			return
 		}
-
 		file, _, err := r.FormFile("file")
 		if err != nil {
 			http.Error(w, "No file provided", http.StatusBadRequest)
@@ -47,7 +47,7 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()
 
-		data, err := io.ReadAll(file)
+		data, err := io.ReadAll(io.LimitReader(file, maxUploadBytes))
 		if err != nil {
 			http.Error(w, "Failed to read file", http.StatusBadRequest)
 			return
@@ -68,13 +68,13 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle JSON request (URL or data URI)
+	// JSON request (URL or data URI) with body limit
+	dec := json.NewDecoder(r.Body)
 	var req struct {
 		URL     string `json:"url,omitempty"`
 		DataURI string `json:"dataUri,omitempty"`
 	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := dec.Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -101,14 +101,13 @@ func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	h.writeJSONResponse(w, asset)
 }
 
-// HandleBatch handles batch processing of multiple images
 func (h *Handler) HandleBatch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 
 	var req struct {
 		Items []BatchInput `json:"items"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return

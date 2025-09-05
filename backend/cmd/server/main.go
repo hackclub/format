@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// Initialize session manager
-	sessionManager := session.NewManager(cfg.SessionSecret)
+	sessionManager := session.NewManager(cfg.SessionSecret, cfg.AppBaseURL)
 
 	// Initialize OIDC provider
 	redirectURL := fmt.Sprintf("%s/api/auth/callback", cfg.AppBaseURL)

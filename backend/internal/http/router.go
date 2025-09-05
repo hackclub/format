@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -45,6 +47,15 @@ func NewServer(
 	}
 }
 
+// helper to compute allowed origin from APP_BASE_URL
+func originFromBaseURL(base string) string {
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "http://localhost:3000"
+	}
+	return fmt.Sprintf("%s://%s", strings.ToLower(u.Scheme), u.Host)
+}
+
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 
@@ -55,9 +66,16 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// CORS configuration
+	// CORS: dynamically allow only APP_BASE_URL origin (and localhost during local dev)
+	allowed := []string{originFromBaseURL(s.config.AppBaseURL)}
+	if strings.Contains(s.config.AppBaseURL, "localhost") {
+		if !contains(allowed, "http://localhost:3000") {
+			allowed = append(allowed, "http://localhost:3000")
+		}
+	}
+
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{s.config.AppBaseURL, "http://localhost:3000"},
+		AllowedOrigins:   allowed,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -97,6 +115,15 @@ func (s *Server) Routes() http.Handler {
 	})
 
 	return r
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // Middleware
@@ -155,29 +182,58 @@ func (s *Server) HandleConfig(w http.ResponseWriter, r *http.Request) {
 
 
 func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	// Generate state + PKCE
 	state := auth.GenerateState()
-	authURL := s.oidcProvider.GetAuthURL(state)
+	verifier := auth.GeneratePKCEVerifier()
+	challenge := auth.PKCEChallengeS256(verifier)
 
-	// Store state in session for validation
-	// For simplicity, we'll redirect immediately
-	// In production, you might want to store state and validate it in callback
+	// Persist in session
+	if err := s.sessionManager.SetOAuthState(w, r, state); err != nil {
+		s.logger.Error().Err(err).Msg("failed to store oauth state")
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if err := s.sessionManager.SetOAuthCodeVerifier(w, r, verifier); err != nil {
+		s.logger.Error().Err(err).Msg("failed to store oauth code verifier")
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
 
+	authURL := s.oidcProvider.GetAuthURL(state, challenge)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get authorization code
+	// Validate state
+	stateParam := r.URL.Query().Get("state")
+	if stateParam == "" {
+		http.Error(w, "Missing state", http.StatusBadRequest)
+		return
+	}
+	expectedState, err := s.sessionManager.GetAndClearOAuthState(w, r)
+	if err != nil || expectedState == "" || expectedState != stateParam {
+		s.logger.Error().Err(err).Msg("invalid oauth state")
+		http.Error(w, "Invalid state", http.StatusBadRequest)
+		return
+	}
+
+	verifier, err := s.sessionManager.GetAndClearOAuthCodeVerifier(w, r)
+	if err != nil || verifier == "" {
+		s.logger.Error().Err(err).Msg("missing code verifier")
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange code
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		s.logger.Error().Msg("no authorization code received")
 		http.Error(w, "Authorization failed", http.StatusBadRequest)
 		return
 	}
-
-	// Exchange code for token
-	token, err := s.oidcProvider.ExchangeCode(ctx, code)
+	token, err := s.oidcProvider.ExchangeCode(ctx, code, verifier)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to exchange code for token")
 		http.Error(w, "Authorization failed", http.StatusInternalServerError)
@@ -271,12 +327,14 @@ func (s *Server) HandleMe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleHTMLTransform(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// limit HTML size (e.g., 1.5MB)
+	r.Body = http.MaxBytesReader(w, r.Body, 1_500_000)
+
 	var req html.TransformRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-
 	if req.HTML == "" {
 		http.Error(w, "HTML content required", http.StatusBadRequest)
 		return

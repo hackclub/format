@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with Hack Club red -->
+  <circle cx="16" cy="16" r="16" fill="#EC3750"/>
+  
+  <!-- Simple "F" for Format -->
+  <path d="M12 10h8v3h-5v2h4v3h-4v6h-3V10z" fill="white"/>
+</svg>

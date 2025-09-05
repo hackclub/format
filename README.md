@@ -57,7 +57,7 @@ docker-compose up -d app
 ```
 
 ### Port Configuration
-By default, the app runs on port 8080. You can customize ports using environment variables:
+By default, the app runs on port 8080. You can customize the external port using environment variables:
 
 ```bash
 # Use different external port
@@ -65,16 +65,9 @@ HOST_PORT=9000 docker-compose up -d app
 
 # Or set in .env file
 HOST_PORT=9000
-NGINX_HTTP_PORT=8080
 ```
 
-**Note:** HTTPS is handled by your reverse proxy (Cloudflare, nginx, etc.), not by the container.
-
-### Production with Nginx
-```bash
-# Start with reverse proxy
-docker-compose --profile production up -d
-```
+**Note:** HTTPS is handled by your hosting platform's reverse proxy, not by the container.
 
 ## Features
 

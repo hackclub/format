@@ -36,6 +36,10 @@ func main() {
 	if cfg.SessionSecret == "" {
 		logger.Fatal().Msg("SESSION_SECRET is required")
 	}
+	if len(cfg.SessionSecret) < 32 {
+		logger.Fatal().Msgf("SESSION_SECRET must be at least 32 characters, got %d", len(cfg.SessionSecret))
+	}
+	logger.Info().Msgf("SESSION_SECRET configured (%d chars), APP_BASE_URL: %s", len(cfg.SessionSecret), cfg.AppBaseURL)
 	if cfg.GoogleOAuthClientID == "" {
 		logger.Fatal().Msg("GOOGLE_OAUTH_CLIENT_ID is required")
 	}

@@ -113,7 +113,11 @@ func (m *Manager) RequireAuth(next http.Handler) http.Handler {
 func (m *Manager) SetOAuthState(w http.ResponseWriter, r *http.Request, state string) error {
 	sess, err := m.store.Get(r, SessionName)
 	if err != nil {
-		return err
+		// If the session is corrupted, create a new one
+		sess, err = m.store.New(r, SessionName)
+		if err != nil {
+			return err
+		}
 	}
 	sess.Values[oauthStateKey] = state
 	return sess.Save(r, w)

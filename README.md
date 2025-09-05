@@ -2,6 +2,16 @@
 
 A paste-clean-copy tool: you paste any rich text; the app sanitizes and normalizes the HTML; images are rehosted on Hack Club's CDN (R2 + Cloudflare) with dedupe, intelligent conversion, and metadata stripping; you copy the Gmail-safe result and paste into Gmail.
 
+Things to test:
+
+- Image upload:
+  - PNG with transparency
+  - PNG no transparency (converts to jpeg)
+  - JPEG
+- Pasting rich HTML from Gmail with image attachments
+- Pasting image directly from local fileystem
+- Pasting image from a website
+
 ## Architecture
 
 ```

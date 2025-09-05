@@ -18,24 +18,18 @@ This guide will help you set up the Format application locally and in production
 
 #### macOS
 ```bash
-# Install libvips
-brew install vips
+# Install image processing tools
+brew install vips jpeg-xl oxipng
 
 # Install Air for hot reloading
 go install github.com/air-verse/air@latest
-
-# Install oxipng (optional, for PNG optimization)
-brew install oxipng
 ```
 
 #### Ubuntu/Debian
 ```bash
-# Install libvips
+# Install image processing tools
 sudo apt-get update
-sudo apt-get install libvips-dev
-
-# Install oxipng
-sudo apt-get install oxipng
+sudo apt-get install -y libvips-dev libjxl-tools oxipng
 ```
 
 ### 2. Clone and Setup

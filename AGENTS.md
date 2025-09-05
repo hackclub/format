@@ -13,11 +13,14 @@ This file contains comprehensive instructions for AI agents working on this proj
 **Install Required Dependencies:**
 ```bash
 # macOS
-brew install vips                    # Image processing library
+brew install vips jpeg-xl oxipng      # Image processing libraries
+brew install jphastings/tools/jpegli  # State-of-the-art JPEG encoder
 go install github.com/air-verse/air@latest  # Go hot reload
 
 # Verify installations
 pkg-config --exists vips && echo "✅ vips installed" || echo "❌ vips missing"
+command -v cjpegli >/dev/null && echo "✅ jpegli installed" || echo "❌ jpegli missing"
+command -v oxipng >/dev/null && echo "✅ oxipng installed" || echo "❌ oxipng missing"
 air -v                               # Should show Air version
 ```
 
@@ -156,11 +159,12 @@ Gmail-Compatible HTML Output
 ### Required Dependencies
 ```bash
 # macOS
-brew install vips
+brew install vips jpeg-xl oxipng
 go install github.com/air-verse/air@latest
 
 # Ubuntu/Debian  
-sudo apt-get install libvips-dev
+sudo apt-get update
+sudo apt-get install libvips-dev libjxl-tools oxipng
 ```
 
 ### Environment Variables

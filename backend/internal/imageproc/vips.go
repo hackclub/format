@@ -1,344 +1,329 @@
 package imageproc
 
 import (
-	"fmt"
-	"github.com/h2non/bimg"
-	"github.com/hackclub/format/internal/util"
+    "bytes"
+    "fmt"
+    "image"
+    "os/exec"
+
+    "github.com/gen2brain/jpegli"
+    "github.com/h2non/bimg"
+    "github.com/hackclub/format/internal/util"
 )
 
 type Processor struct {
-	jpegQuality int
-	jpegProgressive bool
-	pngStrip bool
+    jpegQuality     int
+    jpegProgressive bool
+    pngStrip        bool
 }
 
 type ProcessResult struct {
-	Data         []byte
-	ContentType  string
-	Width        int
-	Height       int
-	HasAlpha     bool
-	OriginalSize int
-	CompressedSize int
+    Data           []byte
+    ContentType    string
+    Width          int
+    Height         int
+    HasAlpha       bool
+    OriginalSize   int
+    CompressedSize int
 }
 
 func NewProcessor(jpegQuality int, jpegProgressive, pngStrip bool) *Processor {
-	return &Processor{
-		jpegQuality: jpegQuality,
-		jpegProgressive: jpegProgressive,
-		pngStrip:    pngStrip,
-	}
+    return &Processor{
+        jpegQuality:     jpegQuality,
+        jpegProgressive: jpegProgressive,
+        pngStrip:        pngStrip,
+    }
 }
+
+const oneMB = 1024 * 1024
+const maxDimension = 3840
 
 func (p *Processor) Process(data []byte, originalContentType string) (*ProcessResult, error) {
-	// Validate input is an image
-	if !util.IsImageMIME(originalContentType) {
-		detectedType := util.DetectContentType(data)
-		if !util.IsImageMIME(detectedType) {
-			return nil, fmt.Errorf("input is not a valid image format")
-		}
-		originalContentType = detectedType
-	}
+    originalSize := len(data)
 
-	// Get image metadata
-	metadata, err := bimg.NewImage(data).Metadata()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read image metadata: %v", err)
-	}
+    // 1. If the file is under 1MB, don't touch it.
+    if originalSize <= oneMB {
+        fmt.Printf("✅ Image size is %d bytes (<= 1MB), skipping processing.\n", originalSize)
+        metadata, err := bimg.NewImage(data).Metadata()
+        if err != nil {
+            // Could fail on non-images, but that's ok. Return original data.
+            return &ProcessResult{
+                Data:           data,
+                ContentType:    originalContentType,
+                OriginalSize:   originalSize,
+                CompressedSize: originalSize,
+            }, nil
+        }
+        return &ProcessResult{
+            Data:           data,
+            ContentType:    originalContentType,
+            Width:          metadata.Size.Width,
+            Height:         metadata.Size.Height,
+            HasAlpha:       metadata.Alpha,
+            OriginalSize:   originalSize,
+            CompressedSize: originalSize,
+        }, nil
+    }
 
-	originalSize := len(data)
-	hasAlpha := metadata.Alpha
+    fmt.Printf("🚀 Image size is %d bytes (> 1MB), starting SOTA processing pipeline.\n", originalSize)
 
-	// Determine if we need to resize
-	// Resize if dimensions exceed 3840px OR file size > 5MB
-	const maxFileSize = 5 * 1024 * 1024 // 5MB
-	needsResize := metadata.Size.Width > 3840 || 
-	              metadata.Size.Height > 3840 || 
-	              originalSize > maxFileSize
-	
-	// Log resize decision
-	if needsResize {
-		fmt.Printf("🔄 Image resize triggered: %dx%d pixels, %d bytes (%.1fMB) - max: 3840px or 5MB\n", 
-			metadata.Size.Width, metadata.Size.Height, originalSize, float64(originalSize)/(1024*1024))
-	} else {
-		fmt.Printf("✅ Image resize skipped: %dx%d pixels, %d bytes (%.1fMB) - within limits\n",
-			metadata.Size.Width, metadata.Size.Height, originalSize, float64(originalSize)/(1024*1024))
-	}
+    // Validate input is a supported image format
+    if !util.IsImageMIME(originalContentType) {
+        detectedType := util.DetectContentType(data)
+        if !util.IsImageMIME(detectedType) {
+            return nil, fmt.Errorf("input is not a valid image format, detected: %s", detectedType)
+        }
+        originalContentType = detectedType
+    }
 
-	// Create processing options
-	options := bimg.Options{
-		Quality:       p.jpegQuality,
-		StripMetadata: true,
-	}
+    // 2. Get image metadata
+    metadata, err := bimg.NewImage(data).Metadata()
+    if err != nil {
+        return nil, fmt.Errorf("failed to read image metadata: %v", err)
+    }
 
-	// Resize if needed
-	if needsResize {
-		// Calculate new dimensions maintaining aspect ratio with 3840px max
-		newWidth, newHeight := calculateDimensionsWithMax(metadata.Size.Width, metadata.Size.Height, 3840)
-		options.Width = newWidth
-		options.Height = newHeight
-		options.Crop = false // Use thumbnail/resize, not crop
-		options.Enlarge = false // Never upscale
-	}
+    // 3. Resize if necessary
+    imageToProcess := data
+    needsResize := metadata.Size.Width > maxDimension || metadata.Size.Height > maxDimension
+    if needsResize {
+        fmt.Printf("🔄 Image resize triggered: %dx%d -> max %dpx\n", metadata.Size.Width, metadata.Size.Height, maxDimension)
+        newWidth, newHeight := calculateDimensionsWithMax(metadata.Size.Width, metadata.Size.Height, maxDimension)
 
-	// Decide output format based on alpha channel and transparency
-	shouldConvertToJPEG := util.ShouldConvertToJPEG(originalContentType, hasAlpha && p.hasRealTransparency(data))
+        // Resize using bimg with proper format output
+        resizeOptions := bimg.Options{
+            Width: newWidth,
+            Height: newHeight,
+            Type: bimg.PNG,  // Use PNG to preserve quality for next stage
+            Quality: 100,
+        }
+        
+        resizedData, err := bimg.NewImage(data).Process(resizeOptions)
+        if err != nil {
+            return nil, fmt.Errorf("failed to resize image: %v", err)
+        }
+        imageToProcess = resizedData
+    }
 
-	fmt.Printf("🎨 Format decision: %s → %s (hasAlpha: %t, shouldConvert: %t)\n", 
-		originalContentType, 
-		map[bool]string{true: "JPEG", false: "PNG"}[shouldConvertToJPEG],
-		hasAlpha, 
-		shouldConvertToJPEG)
+    // 4. Decide format and apply SOTA compression
+    var processedData []byte
+    var outputContentType string
 
-	var processedData []byte
-	var outputContentType string
+    // Use more accurate transparency detection - check if image actually uses transparency
+    hasRealTransparency := hasActualTransparency(data, metadata)
+    shouldConvertToJPEG := util.ShouldConvertToJPEG(originalContentType, hasRealTransparency)
+    
+    fmt.Printf("🔍 Transparency analysis: hasAlphaChannel=%t, hasRealTransparency=%t, shouldConvertToJPEG=%t\n", 
+        metadata.Alpha, hasRealTransparency, shouldConvertToJPEG)
 
-	if shouldConvertToJPEG || originalContentType == "image/jpeg" || originalContentType == "image/jpg" {
-		// Convert to JPEG (or keep as JPEG)
-		options.Type = bimg.JPEG
-		processedData, err = bimg.NewImage(data).Process(options)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process image as JPEG: %v", err)
-		}
-		outputContentType = "image/jpeg"
-	} else {
-		// Keep as PNG (only for PNGs with transparency)
-		options.Type = bimg.PNG
-		if p.pngStrip {
-			options.StripMetadata = true
-		}
-		processedData, err = bimg.NewImage(data).Process(options)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process image as PNG: %v", err)
-		}
-		outputContentType = "image/png"
-		
-		// Apply PNG optimization if available
-		processedData, err = p.optimizePNG(processedData)
-		if err != nil {
-			// If PNG optimization fails, use original processed data
-			fmt.Printf("PNG optimization failed: %v\n", err)
-		}
-	}
+    if shouldConvertToJPEG {
+        fmt.Println("✨ Compressing with state-of-the-art jpegli...")
+        outputContentType = "image/jpeg"
+        processedData, err = compressWithJpegli(imageToProcess)
+        if err != nil {
+            return nil, fmt.Errorf("jpegli compression failed: %w", err)
+        }
+    } else {
+        fmt.Println("✨ Compressing with oxipng...")
+        outputContentType = "image/png"
+        // If we resized, the intermediate is a PNG. If not, it's the original PNG.
+        // In either case, it's safe to run through oxipng.
+        processedData, err = compressWithOxipng(imageToProcess)
+        if err != nil {
+            return nil, fmt.Errorf("oxipng compression failed: %w", err)
+        }
+    }
 
-	// Get final dimensions
-	finalMetadata, err := bimg.NewImage(processedData).Metadata()
-	if err != nil {
-		// Fallback to original dimensions if we can't read new metadata
-		return &ProcessResult{
-			Data:           processedData,
-			ContentType:    outputContentType,
-			Width:          metadata.Size.Width,
-			Height:         metadata.Size.Height,
-			HasAlpha:       hasAlpha,
-			OriginalSize:   originalSize,
-			CompressedSize: len(processedData),
-		}, nil
-	}
+    // 5. Get final metadata and return
+    finalMetadata, err := bimg.NewImage(processedData).Metadata()
+    if err != nil {
+        return nil, fmt.Errorf("failed to read final image metadata: %v", err)
+    }
 
-	return &ProcessResult{
-		Data:           processedData,
-		ContentType:    outputContentType,
-		Width:          finalMetadata.Size.Width,
-		Height:         finalMetadata.Size.Height,
-		HasAlpha:       hasAlpha,
-		OriginalSize:   originalSize,
-		CompressedSize: len(processedData),
-	}, nil
+    return &ProcessResult{
+        Data:           processedData,
+        ContentType:    outputContentType,
+        Width:          finalMetadata.Size.Width,
+        Height:         finalMetadata.Size.Height,
+        HasAlpha:       finalMetadata.Alpha,
+        OriginalSize:   originalSize,
+        CompressedSize: len(processedData),
+    }, nil
 }
 
+// compressWithJpegli uses the Go jpegli library for state-of-the-art JPEG compression.
+func compressWithJpegli(input []byte) ([]byte, error) {
+    // Decode the input image data to Go image.Image
+    var img image.Image
+    var err error
+    
+    // Try to decode as various formats
+    reader := bytes.NewReader(input)
+    img, _, err = image.Decode(reader)
+    if err != nil {
+        // Fall back to bimg if standard decoders fail
+        fmt.Printf("⚠️ Standard image decode failed, falling back to bimg. Error: %v\n", err)
+        return fallbackJPEGCompression(input)
+    }
+
+    // Use jpegli to encode with optimal settings
+    var buf bytes.Buffer
+    
+    // jpegli.EncodingOptions with high quality and optimal settings
+    options := &jpegli.EncodingOptions{
+        Quality:               95,    // High quality for minimal loss
+        ProgressiveLevel:      2,     // Maximum progressive JPEG
+        OptimizeCoding:        true,  // Huffman code optimization
+        AdaptiveQuantization:  true,  // Better quality
+        FancyDownsampling:     true,  // Better quality
+        ChromaSubsampling:     image.YCbCrSubsampleRatio444, // No chroma subsampling for max quality
+    }
+    
+    err = jpegli.Encode(&buf, img, options)
+    if err != nil {
+        // Fall back to bimg if jpegli fails
+        fmt.Printf("⚠️ jpegli encoding failed, falling back to bimg. Error: %v\n", err)
+        return fallbackJPEGCompression(input)
+    }
+
+    fmt.Printf("✅ jpegli compression successful: %d bytes -> %d bytes (%.1f%% reduction)\n", 
+        len(input), buf.Len(), float64(len(input)-buf.Len())/float64(len(input))*100)
+    
+    return buf.Bytes(), nil
+}
+
+// fallbackJPEGCompression uses bimg as fallback when jpegli fails
+func fallbackJPEGCompression(input []byte) ([]byte, error) {
+    img := bimg.NewImage(input)
+    jpegOptions := bimg.Options{
+        Type: bimg.JPEG,
+        Quality: 90,
+        StripMetadata: true,
+        Interpretation: bimg.InterpretationSRGB,
+    }
+    
+    jpegData, err := img.Process(jpegOptions)
+    if err != nil {
+        fmt.Printf("⚠️ Fallback JPEG compression also failed, returning original data. Error: %v", err)
+        return input, nil
+    }
+    
+    fmt.Printf("✅ Fallback bimg compression: %d bytes -> %d bytes\n", len(input), len(jpegData))
+    return jpegData, nil
+}
+
+// compressWithOxipng uses `oxipng` for lossless PNG optimization.
+func compressWithOxipng(input []byte) ([]byte, error) {
+    // Universal web-safe default: purely lossless, keeps display-critical metadata
+    cmd := exec.Command("oxipng", "-o", "4", "--strip", "safe", "-i", "0", "-")
+
+    var out, stderr bytes.Buffer
+    cmd.Stdin = bytes.NewReader(input)
+    cmd.Stdout = &out
+    cmd.Stderr = &stderr
+
+    if err := cmd.Run(); err != nil {
+        // If oxipng fails (e.g., on a non-PNG passed to it), just return the input
+        fmt.Printf("⚠️ oxipng compression failed, returning unoptimized data. Error: %v\nStderr: %s", err, stderr.String())
+        return input, nil
+    }
+
+    // oxipng returns original if it can't improve it, which results in an empty stdout.
+    if out.Len() == 0 {
+        return input, nil
+    }
+
+    return out.Bytes(), nil
+}
+
+// calculateDimensionsWithMax maintains aspect ratio while ensuring neither width nor height exceeds a max value.
 func calculateDimensionsWithMax(originalWidth, originalHeight, maxDimension int) (int, int) {
-	// Calculate new dimensions maintaining aspect ratio with a maximum dimension
-	var newWidth, newHeight int
-	
-	// Scale based on whichever dimension exceeds the limit more
-	widthScale := float64(maxDimension) / float64(originalWidth)
-	heightScale := float64(maxDimension) / float64(originalHeight)
-	
-	// Use the more restrictive scale (smaller scale factor)
-	scale := widthScale
-	if heightScale < widthScale {
-		scale = heightScale
-	}
-	
-	// Only scale down if we need to (don't upscale)
-	if scale >= 1.0 {
-		return originalWidth, originalHeight
-	}
-	
-	newWidth = int(float64(originalWidth) * scale)
-	newHeight = int(float64(originalHeight) * scale)
-	
-	return newWidth, newHeight
+    if originalWidth <= maxDimension && originalHeight <= maxDimension {
+        return originalWidth, originalHeight
+    }
+
+    ratio := float64(originalWidth) / float64(originalHeight)
+
+    if originalWidth > originalHeight {
+        return maxDimension, int(float64(maxDimension) / ratio)
+    }
+    return int(float64(maxDimension) * ratio), maxDimension
 }
 
-
-
-// hasRealTransparency checks if the image has any actually transparent pixels
-func (p *Processor) hasRealTransparency(data []byte) bool {
-	image := bimg.NewImage(data)
-	metadata, err := image.Metadata()
-	if err != nil || !metadata.Alpha {
-		return false
-	}
-	
-	// If the image has 4 channels (RGBA) or 2 channels (GA), it likely has meaningful transparency
-	// This is a more reliable heuristic than trying to detect pixel values
-	if metadata.Channels == 4 || metadata.Channels == 2 {
-		return true
-	}
-	
-	// For 3-channel images that still have Alpha=true in metadata, 
-	// this might be a false positive or unusual format
-	if metadata.Channels == 3 {
-		return p.deepTransparencyCheck(data)
-	}
-	return false
+// hasActualTransparency checks if image actually uses transparency by sampling alpha values
+func hasActualTransparency(data []byte, metadata bimg.ImageMetadata) bool {
+    // If no alpha channel, definitely no transparency
+    if !metadata.Alpha {
+        return false
+    }
+    
+    // Decode the image using Go's standard image decoder to access raw pixel data
+    reader := bytes.NewReader(data)
+    img, _, err := image.Decode(reader)
+    if err != nil {
+        fmt.Printf("🔍 Failed to decode image for alpha sampling, assuming transparency. Error: %v\n", err)
+        return true // Conservative approach - assume transparency if we can't decode
+    }
+    
+    bounds := img.Bounds()
+    width := bounds.Dx()
+    height := bounds.Dy()
+    
+    // Sample pixels to check for actual transparency (alpha < 255)
+    // Use a grid sampling approach to check pixels across the entire image
+    sampleStep := max(1, max(width/20, height/20)) // Sample roughly 400 pixels (20x20 grid)
+    transparentPixels := 0
+    totalSampled := 0
+    
+    for y := bounds.Min.Y; y < bounds.Max.Y; y += sampleStep {
+        for x := bounds.Min.X; x < bounds.Max.X; x += sampleStep {
+            color := img.At(x, y)
+            
+            // Check if this color has alpha information
+            if alphaColor, hasAlpha := color.(interface{ RGBA() (r, g, b, a uint32) }); hasAlpha {
+                _, _, _, alpha := alphaColor.RGBA()
+                totalSampled++
+                
+                // Alpha values are 16-bit (0-65535), so 65535 = fully opaque
+                if alpha < 65535 {
+                    transparentPixels++
+                }
+            }
+        }
+    }
+    
+    // If we found any transparent pixels, the image uses transparency
+    hasTransparency := transparentPixels > 0
+    
+    fmt.Printf("🔍 Alpha sampling: %d/%d pixels have transparency (%.1f%%), result=%t\n", 
+        transparentPixels, totalSampled, float64(transparentPixels)/float64(totalSampled)*100, hasTransparency)
+    
+    return hasTransparency
 }
 
-// deepTransparencyCheck performs a more thorough check for edge cases
-func (p *Processor) deepTransparencyCheck(data []byte) bool {
-	// For PNG files that claim to have alpha but are 3-channel,
-	// we'll do a more careful analysis
-	image := bimg.NewImage(data)
-	
-	// Try to extract a sample and convert it
-	options := bimg.Options{
-		Type: bimg.PNG,
-		Width: 50,
-		Height: 50,
-	}
-	
-	sampleData, err := image.Process(options)
-	if err != nil {
-		return true
-	}
-	
-	// Check the sample's metadata
-	sampleImg := bimg.NewImage(sampleData)
-	sampleMetadata, err := sampleImg.Metadata()
-	if err != nil {
-		return true
-	}
-	
-	return sampleMetadata.Channels == 4 || sampleMetadata.Channels == 2
-}
-
-// checkPNGAlphaValues checks if a PNG has any pixels with alpha < 255
-func (p *Processor) checkPNGAlphaValues(pngData []byte) bool {
-	// Create a new image from the PNG data
-	img := bimg.NewImage(pngData)
-	
-	// Check metadata first
-	metadata, err := img.Metadata()
-	if err != nil || !metadata.Alpha {
-		fmt.Printf("🔍 checkPNGAlphaValues: No alpha in metadata\n")
-		return false
-	}
-	
-	// Try to convert to JPEG with different background colors
-	// If the results are visually different, transparency is present
-	whiteJPEGOptions := bimg.Options{
-		Type:          bimg.JPEG,
-		Quality:       95,
-		Background:    bimg.Color{255, 255, 255}, // White background
-		StripMetadata: true,
-	}
-	
-	blackJPEGOptions := bimg.Options{
-		Type:          bimg.JPEG,
-		Quality:       95,
-		Background:    bimg.Color{0, 0, 0}, // Black background
-		StripMetadata: true,
-	}
-	
-	whiteJPEG, err1 := img.Process(whiteJPEGOptions)
-	blackJPEG, err2 := img.Process(blackJPEGOptions)
-	
-	if err1 != nil || err2 != nil {
-		fmt.Printf("🔍 checkPNGAlphaValues: JPEG conversion failed, assuming transparency\n")
-		return true
-	}
-	
-	// If the two JPEG versions are identical, there's no transparency
-	// If they're different, transparency was affecting the composite
-	identical := len(whiteJPEG) == len(blackJPEG)
-	
-	// Also compare by file size difference - transparent areas will compress differently
-	sizeDiffPercent := float64(abs(len(whiteJPEG)-len(blackJPEG))) / float64(max(len(whiteJPEG), len(blackJPEG))) * 100
-	
-	fmt.Printf("🔍 checkPNGAlphaValues: White JPEG: %d bytes, Black JPEG: %d bytes\n", 
-		len(whiteJPEG), len(blackJPEG))
-	fmt.Printf("🔍 checkPNGAlphaValues: Size difference: %.1f%%, Identical: %t\n", 
-		sizeDiffPercent, identical)
-	
-	// If there's a meaningful size difference between white and black background,
-	// or if they're not identical, transparency is present
-	hasTransparency := !identical || sizeDiffPercent > 1.0
-	
-	fmt.Printf("🔍 checkPNGAlphaValues: Transparency detected = %t\n", hasTransparency)
-	return hasTransparency
+// min returns the minimum of multiple integers
+func min(values ...int) int {
+    if len(values) == 0 {
+        return 0
+    }
+    minVal := values[0]
+    for _, v := range values[1:] {
+        if v < minVal {
+            minVal = v
+        }
+    }
+    return minVal
 }
 
 func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
+    if x < 0 {
+        return -x
+    }
+    return x
 }
 
 func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// samplePixelsForTransparency samples pixels to detect actual transparency usage
-func (p *Processor) samplePixelsForTransparency(pngData []byte) bool {
-	// For the middle-ground cases, we'll use a practical heuristic:
-	// Extract to a very small size and convert to JPEG with white background
-	// If the result is visually very similar, there's likely no meaningful transparency
-	
-	image := bimg.NewImage(pngData)
-	
-	// Create a tiny 10x10 sample for detailed checking
-	tinyOptions := bimg.Options{
-		Type:   bimg.PNG,
-		Width:  10,
-		Height: 10,
-	}
-	
-	tinyPNG, err := image.Process(tinyOptions)
-	if err != nil {
-		return true // Assume transparency if we can't sample
-	}
-	
-	// Convert the same tiny image to JPEG with white background
-	tinyJPEGOptions := bimg.Options{
-		Type:       bimg.JPEG,
-		Width:      10,
-		Height:     10,
-		Quality:    95,
-		Background: bimg.Color{255, 255, 255},
-	}
-	
-	tinyJPEG, err := image.Process(tinyJPEGOptions)
-	if err != nil {
-		return true // Assume transparency if conversion fails
-	}
-	
-	// If the tiny PNG is significantly larger than tiny JPEG,
-	// there's likely meaningful transparency data
-	return float64(len(tinyPNG))/float64(len(tinyJPEG)) > 1.5
-}
-
-// optimizePNG attempts to optimize PNG files using external tools
-func (p *Processor) optimizePNG(data []byte) ([]byte, error) {
-	// This would call external tools like oxipng
-	// For now, return the original data
-	// In a production system, you'd implement calls to:
-	// - oxipng for lossless compression
-	// - libimagequant for palette optimization
-	return data, nil
+    if a > b {
+        return a
+    }
+    return b
 }

@@ -86,6 +86,12 @@ func (s *Server) Routes() http.Handler {
 	// Health check
 	r.Get("/healthz", s.HealthCheck)
 
+	// Serve static files from Next.js build
+	r.Handle("/_next/static/*", http.StripPrefix("/_next/static/", http.FileServer(http.Dir("./static"))))
+	r.Handle("/favicon.svg", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./public/favicon.svg")
+	}))
+	
 	// Public config endpoint (no auth required)
 	r.Get("/api/config", s.HandleConfig)
 	
@@ -113,6 +119,9 @@ func (s *Server) Routes() http.Handler {
 
 		
 	})
+
+	// Catch-all for SPA routing - serve index.html for any unmatched routes
+	r.NotFound(s.HandleSPA)
 
 	return r
 }
@@ -322,6 +331,34 @@ func (s *Server) HandleMe(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
+	// For any non-API routes, serve the main HTML page (SPA)
+	w.Header().Set("Content-Type", "text/html")
+	
+	// Next.js App Router HTML shell
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Format - Hack Club</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta name="next-head-count" content="4">
+</head>
+<body>
+    <div id="__next"></div>
+    <script src="/_next/static/chunks/polyfills-42372ed130431b0a.js" nomodule=""></script>
+    <script src="/_next/static/chunks/webpack-ac9a027431ef0133.js"></script>
+    <script src="/_next/static/chunks/fd9d1056-e6fad75ea1edeaa8.js"></script>
+    <script src="/_next/static/chunks/117-37af661815ca3999.js"></script>
+    <script src="/_next/static/chunks/main-app-e0137810acce9719.js"></script>
+</body>
+</html>`
+	
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
 }
 
 func (s *Server) HandleHTMLTransform(w http.ResponseWriter, r *http.Request) {

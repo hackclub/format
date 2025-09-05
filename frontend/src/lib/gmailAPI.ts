@@ -214,9 +214,9 @@ class GmailAPIClient {
       // Match by image dimensions or other attributes from context
       if (context.alt && context.alt.length > 10) {
         // If alt text contains meaningful content that might match Content-ID or description
-        const altWords = context.alt.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-        const filenameWords = (part.filename || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3)
-        const commonWords = altWords.filter(word => filenameWords.some(fword => fword.includes(word) || word.includes(fword)))
+        const altWords = context.alt.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3)
+        const filenameWords = (part.filename || '').toLowerCase().split(/[^a-z0-9]+/).filter((w: string) => w.length > 3)
+        const commonWords = altWords.filter(word => filenameWords.some((fword: string) => fword.includes(word) || word.includes(fword)))
         if (commonWords.length > 0) {
           console.log('🎯 Found attachment by alt text similarity:', commonWords)
           return part.body.attachmentId

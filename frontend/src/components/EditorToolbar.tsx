@@ -63,8 +63,6 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
     if ($isRangeSelection(selection)) {
       const anchorNode = selection.anchor.getNode()
       const element = anchorNode.getKey() === 'root' ? anchorNode : anchorNode.getTopLevelElementOrThrow()
-      const elementKey = element.getKey()
-      const elementDOM = editor.getElementByKey(elementKey)
 
       // Update formatting state
       setToolbarState(prev => ({
@@ -75,14 +73,13 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
         isStrikethrough: selection.hasFormat('strikethrough'),
       }))
 
-      // Update link state
+      // Update link state 
       const node = anchorNode
       const parent = node.getParent()
-      if ($isLinkNode(parent) || $isLinkNode(node)) {
-        setToolbarState(prev => ({ ...prev, isLink: true }))
-      } else {
-        setToolbarState(prev => ({ ...prev, isLink: false }))
-      }
+      const linkNode = $isLinkNode(parent) ? parent : ($isLinkNode(node) ? node : null)
+      
+      const isOnLink = !!linkNode
+      setToolbarState(prev => ({ ...prev, isLink: isOnLink }))
 
       // Update list state
       if ($isListNode(element)) {
@@ -103,6 +100,35 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
       }
     }
   }, [editor])
+  
+  // Separate effect to handle link editor show/hide
+  useEffect(() => {
+    if (toolbarState.isLink) {
+      // Show link editor when on a link
+      editor.getEditorState().read(() => {
+        const selection = $getSelection()
+        if ($isRangeSelection(selection)) {
+          const node = selection.anchor.getNode()
+          const parent = node.getParent()
+          const linkNode = $isLinkNode(parent) ? parent : ($isLinkNode(node) ? node : null)
+          
+          if (linkNode) {
+            const currentUrl = linkNode.getURL()
+            setLinkUrl(currentUrl)
+            setShowLinkInput(true)
+            console.log('🔗 Showing link editor for:', currentUrl)
+          }
+        }
+      })
+    } else {
+      // Hide link editor when not on a link
+      if (showLinkInput) {
+        setShowLinkInput(false)
+        setLinkUrl('')
+        console.log('🔗 Hiding link editor - moved away from link')
+      }
+    }
+  }, [toolbarState.isLink, editor, showLinkInput])
 
   useEffect(() => {
     return mergeRegister(
@@ -128,9 +154,26 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
 
   const insertLink = () => {
     if (!toolbarState.isLink) {
+      // Creating new link
+      setLinkUrl('')
       setShowLinkInput(true)
     } else {
-      editor.dispatchCommand(TOGGLE_LINK_COMMAND, null)
+      // Editing existing link - get current URL first
+      editor.getEditorState().read(() => {
+        const selection = $getSelection()
+        if ($isRangeSelection(selection)) {
+          const node = selection.anchor.getNode()
+          const parent = node.getParent()
+          const linkNode = $isLinkNode(parent) ? parent : ($isLinkNode(node) ? node : null)
+          
+          if (linkNode) {
+            const currentUrl = linkNode.getURL()
+            setLinkUrl(currentUrl)
+            setShowLinkInput(true)
+            console.log('📝 Editing existing link:', currentUrl)
+          }
+        }
+      })
     }
   }
 
@@ -340,14 +383,14 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
 
       {/* Link input modal */}
       {showLinkInput && (
-        <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 z-20 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+        <div className="absolute -top-32 left-1/2 transform -translate-x-1/2 z-20 bg-white border border-gray-300 rounded-md shadow-lg p-3 min-w-80">
           <form onSubmit={handleLinkSubmit} className="flex flex-col gap-2">
             <input
               type="url"
               placeholder="Enter URL..."
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
             <div className="flex gap-2">
@@ -355,18 +398,35 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
                 type="submit"
                 className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
               >
-                Add
+                {toolbarState.isLink ? 'Update' : 'Add'}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLinkInput(false)
-                  setLinkUrl('')
-                }}
-                className="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300"
-              >
-                Cancel
-              </button>
+              {toolbarState.isLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.dispatchCommand(TOGGLE_LINK_COMMAND, null)
+                    setShowLinkInput(false)
+                    setLinkUrl('')
+                  }}
+                  className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                >
+                  Remove
+                </button>
+              )}
+              <div className="flex-1" />
+              {toolbarState.isLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (linkUrl) {
+                      window.open(linkUrl, '_blank', 'noopener,noreferrer')
+                    }
+                  }}
+                  className="px-3 py-1 bg-white border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50"
+                >
+                  ↗
+                </button>
+              )}
             </div>
           </form>
         </div>

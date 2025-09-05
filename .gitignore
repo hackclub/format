@@ -32,7 +32,6 @@ backend/build-errors.log
 *.dylib
 *.test
 *.out
-go.sum
 
 # IDEs and editors
 .vscode/

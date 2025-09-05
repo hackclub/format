@@ -44,6 +44,37 @@ npm run dev
 
 See `.env.example` for required environment variables.
 
+## Docker Deployment
+
+### Quick Start
+```bash
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your values...
+
+# Start the application
+docker-compose up -d app
+```
+
+### Port Configuration
+By default, the app runs on port 8080. You can customize ports using environment variables:
+
+```bash
+# Use different external port
+HOST_PORT=9000 docker-compose up -d app
+
+# Or set in .env file
+HOST_PORT=9000
+NGINX_HTTP_PORT=8080
+NGINX_HTTPS_PORT=8443
+```
+
+### Production with Nginx
+```bash
+# Start with reverse proxy
+docker-compose --profile production up -d
+```
+
 ## Features
 
 - **Predictable Gmail formatting**: basic, consistent HTML subset

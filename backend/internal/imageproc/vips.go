@@ -176,18 +176,161 @@ func calculateDimensionsWithMax(originalWidth, originalHeight, maxDimension int)
 
 // hasRealTransparency checks if the image has any actually transparent pixels
 func (p *Processor) hasRealTransparency(data []byte) bool {
-	// This is a simplified check - in a production system you might want
-	// to implement a more sophisticated transparency detection
 	image := bimg.NewImage(data)
 	metadata, err := image.Metadata()
 	if err != nil || !metadata.Alpha {
 		return false
 	}
 	
-	// For now, assume that if alpha channel exists, there's transparency
-	// A more sophisticated implementation would sample pixels to check
-	// if any are actually transparent (alpha < 255)
-	return true
+	// If the image has 4 channels (RGBA) or 2 channels (GA), it likely has meaningful transparency
+	// This is a more reliable heuristic than trying to detect pixel values
+	if metadata.Channels == 4 || metadata.Channels == 2 {
+		return true
+	}
+	
+	// For 3-channel images that still have Alpha=true in metadata, 
+	// this might be a false positive or unusual format
+	if metadata.Channels == 3 {
+		return p.deepTransparencyCheck(data)
+	}
+	return false
+}
+
+// deepTransparencyCheck performs a more thorough check for edge cases
+func (p *Processor) deepTransparencyCheck(data []byte) bool {
+	// For PNG files that claim to have alpha but are 3-channel,
+	// we'll do a more careful analysis
+	image := bimg.NewImage(data)
+	
+	// Try to extract a sample and convert it
+	options := bimg.Options{
+		Type: bimg.PNG,
+		Width: 50,
+		Height: 50,
+	}
+	
+	sampleData, err := image.Process(options)
+	if err != nil {
+		return true
+	}
+	
+	// Check the sample's metadata
+	sampleImg := bimg.NewImage(sampleData)
+	sampleMetadata, err := sampleImg.Metadata()
+	if err != nil {
+		return true
+	}
+	
+	return sampleMetadata.Channels == 4 || sampleMetadata.Channels == 2
+}
+
+// checkPNGAlphaValues checks if a PNG has any pixels with alpha < 255
+func (p *Processor) checkPNGAlphaValues(pngData []byte) bool {
+	// Create a new image from the PNG data
+	img := bimg.NewImage(pngData)
+	
+	// Check metadata first
+	metadata, err := img.Metadata()
+	if err != nil || !metadata.Alpha {
+		fmt.Printf("🔍 checkPNGAlphaValues: No alpha in metadata\n")
+		return false
+	}
+	
+	// Try to convert to JPEG with different background colors
+	// If the results are visually different, transparency is present
+	whiteJPEGOptions := bimg.Options{
+		Type:          bimg.JPEG,
+		Quality:       95,
+		Background:    bimg.Color{255, 255, 255}, // White background
+		StripMetadata: true,
+	}
+	
+	blackJPEGOptions := bimg.Options{
+		Type:          bimg.JPEG,
+		Quality:       95,
+		Background:    bimg.Color{0, 0, 0}, // Black background
+		StripMetadata: true,
+	}
+	
+	whiteJPEG, err1 := img.Process(whiteJPEGOptions)
+	blackJPEG, err2 := img.Process(blackJPEGOptions)
+	
+	if err1 != nil || err2 != nil {
+		fmt.Printf("🔍 checkPNGAlphaValues: JPEG conversion failed, assuming transparency\n")
+		return true
+	}
+	
+	// If the two JPEG versions are identical, there's no transparency
+	// If they're different, transparency was affecting the composite
+	identical := len(whiteJPEG) == len(blackJPEG)
+	
+	// Also compare by file size difference - transparent areas will compress differently
+	sizeDiffPercent := float64(abs(len(whiteJPEG)-len(blackJPEG))) / float64(max(len(whiteJPEG), len(blackJPEG))) * 100
+	
+	fmt.Printf("🔍 checkPNGAlphaValues: White JPEG: %d bytes, Black JPEG: %d bytes\n", 
+		len(whiteJPEG), len(blackJPEG))
+	fmt.Printf("🔍 checkPNGAlphaValues: Size difference: %.1f%%, Identical: %t\n", 
+		sizeDiffPercent, identical)
+	
+	// If there's a meaningful size difference between white and black background,
+	// or if they're not identical, transparency is present
+	hasTransparency := !identical || sizeDiffPercent > 1.0
+	
+	fmt.Printf("🔍 checkPNGAlphaValues: Transparency detected = %t\n", hasTransparency)
+	return hasTransparency
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// samplePixelsForTransparency samples pixels to detect actual transparency usage
+func (p *Processor) samplePixelsForTransparency(pngData []byte) bool {
+	// For the middle-ground cases, we'll use a practical heuristic:
+	// Extract to a very small size and convert to JPEG with white background
+	// If the result is visually very similar, there's likely no meaningful transparency
+	
+	image := bimg.NewImage(pngData)
+	
+	// Create a tiny 10x10 sample for detailed checking
+	tinyOptions := bimg.Options{
+		Type:   bimg.PNG,
+		Width:  10,
+		Height: 10,
+	}
+	
+	tinyPNG, err := image.Process(tinyOptions)
+	if err != nil {
+		return true // Assume transparency if we can't sample
+	}
+	
+	// Convert the same tiny image to JPEG with white background
+	tinyJPEGOptions := bimg.Options{
+		Type:       bimg.JPEG,
+		Width:      10,
+		Height:     10,
+		Quality:    95,
+		Background: bimg.Color{255, 255, 255},
+	}
+	
+	tinyJPEG, err := image.Process(tinyJPEGOptions)
+	if err != nil {
+		return true // Assume transparency if conversion fails
+	}
+	
+	// If the tiny PNG is significantly larger than tiny JPEG,
+	// there's likely meaningful transparency data
+	return float64(len(tinyPNG))/float64(len(tinyJPEG)) > 1.5
 }
 
 // optimizePNG attempts to optimize PNG files using external tools

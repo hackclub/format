@@ -54,14 +54,7 @@ export function useGmailAPI() {
     }
   }
 
-  const requestGmailAccess = async () => {
-    try {
-      // Redirect to backend OAuth with Gmail scopes
-      window.location.href = '/api/auth/login?gmail_access=true'
-    } catch (error) {
-      console.error('Failed to request Gmail access:', error)
-    }
-  }
+
 
   const clearGmailAccess = () => {
     gmailClient.clearTokens()
@@ -71,7 +64,6 @@ export function useGmailAPI() {
   return {
     hasGmailAccess,
     loading,
-    requestGmailAccess,
     clearGmailAccess,
     checkGmailAccess,
   }

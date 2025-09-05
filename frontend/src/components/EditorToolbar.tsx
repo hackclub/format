@@ -39,10 +39,10 @@ interface EditorToolbarProps {
   copied?: boolean
   hasContent?: boolean
   hasGmailAccess?: boolean
-  onRequestGmailAccess?: () => void
+
 }
 
-export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, onRequestGmailAccess }: EditorToolbarProps) {
+export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess }: EditorToolbarProps) {
   const [editor] = useLexicalComposerContext()
   const [toolbarState, setToolbarState] = useState<ToolbarState>({
     isBold: false,
@@ -346,16 +346,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
 
       <div className="w-px h-4 bg-gray-300" />
 
-      {/* Gmail Access Button */}
-      {!hasGmailAccess && onRequestGmailAccess && (
-        <button
-          onClick={onRequestGmailAccess}
-          className="px-3 py-1 rounded text-xs font-medium bg-blue-500 text-white hover:bg-blue-600 border"
-          title="Enable Gmail image auto-fetch"
-        >
-          📧
-        </button>
-      )}
+
 
       {/* Copy to Clipboard Button */}
       {onProcessAndCopy && (

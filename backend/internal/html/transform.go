@@ -384,7 +384,7 @@ func (t *Transformer) convertToGmailFormat(html string) string {
 
 // convertHeadingsToGmail converts headings to Gmail-compatible divs
 func (t *Transformer) convertHeadingsToGmail(html string) string {
-	const gmailParagraphStyle = `style="color: rgb(34, 34, 34); font-family: Arial, Helvetica, sans-serif; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"`
+	const gmailBaseStyle = `color: rgb(34, 34, 34); font-family: Arial, Helvetica, sans-serif; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;`
 
 	headingRegex := regexp.MustCompile(`<(h[1-6])[^>]*>(.*?)</h[1-6]>`)
 	
@@ -397,7 +397,7 @@ func (t *Transformer) convertHeadingsToGmail(html string) string {
 		level := submatches[1]
 		content := submatches[2]
 		
-		// Gmail heading styles
+		// Gmail heading styles - combine all into one style attribute
 		var fontSize, fontWeight string
 		switch level {
 		case "h1":
@@ -414,7 +414,9 @@ func (t *Transformer) convertHeadingsToGmail(html string) string {
 			fontWeight = "font-weight: bold;"
 		}
 		
-		return fmt.Sprintf(`<div %s %s %s>%s</div>`, gmailParagraphStyle, fontSize, fontWeight, content)
+		// Combine all styles into a single style attribute
+		combinedStyle := fmt.Sprintf(`style="%s %s %s"`, gmailBaseStyle, fontSize, fontWeight)
+		return fmt.Sprintf(`<div %s>%s</div>`, combinedStyle, content)
 	})
 }
 

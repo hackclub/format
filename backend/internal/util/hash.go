@@ -23,6 +23,6 @@ func Base32Key(data []byte, ext string) string {
 	// Take 26 chars for 130 bits of entropy (collision-resistant and brute-force proof)
 	key := strings.ToLower(encoded)[:26]
 	
-	// Long directory name (20 chars), short filename (6 chars)
-	return fmt.Sprintf("%s/%s%s", key[:20], key[20:], ext)
+	// 2-char sharding for directory structure  
+	return fmt.Sprintf("%s/%s%s", key[:2], key[2:], ext)
 }

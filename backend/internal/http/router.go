@@ -92,8 +92,7 @@ func (s *Server) Routes() http.Handler {
 		// HTML transformation
 		r.Post("/html/transform", s.HandleHTMLTransform)
 
-		// Gmail API integration
-		r.Post("/gmail/attachment", s.HandleGmailAttachment)
+		
 	})
 
 	return r
@@ -226,9 +225,18 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Also pass OAuth tokens to frontend via URL fragment for Gmail API access
-	redirectURL := fmt.Sprintf("%s#access_token=%s&expires_in=3600", 
+	expiresIn := int64(3600) // Default fallback
+	if !token.Expiry.IsZero() {
+		expiresIn = int64(time.Until(token.Expiry).Seconds())
+		if expiresIn <= 0 {
+			expiresIn = 0 // Token already expired
+		}
+	}
+	
+	redirectURL := fmt.Sprintf("%s#access_token=%s&expires_in=%d", 
 		s.config.AppBaseURL, 
-		token.AccessToken)
+		token.AccessToken,
+		expiresIn)
 	
 	if token.RefreshToken != "" {
 		redirectURL += "&refresh_token=" + token.RefreshToken
@@ -291,31 +299,4 @@ func (s *Server) HandleHTMLTransform(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func (s *Server) HandleGmailAttachment(w http.ResponseWriter, r *http.Request) {
-	_ = r.Context()
 
-	var req struct {
-		MessageID    string `json:"messageId"`
-		AttachmentID string `json:"attachmentId"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	if req.MessageID == "" || req.AttachmentID == "" {
-		http.Error(w, "messageId and attachmentId are required", http.StatusBadRequest)
-		return
-	}
-
-	// TODO: Implement Gmail API integration
-	// This would require:
-	// 1. Getting user's Gmail OAuth token from session
-	// 2. Creating Gmail API client
-	// 3. Fetching the attachment
-	// 4. Returning the image data
-
-	// For now, return a helpful error
-	http.Error(w, "Gmail API integration not yet implemented - requires gmail.readonly OAuth scope", http.StatusNotImplemented)
-}

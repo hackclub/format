@@ -110,7 +110,7 @@ interface EditorProps {
   copied?: boolean
   hasContent?: boolean
   hasGmailAccess?: boolean
-  onRequestGmailAccess?: () => void
+
   initialContent?: string
 }
 
@@ -147,7 +147,7 @@ function ImageProcessorPlugin() {
   }, [])
   
   // Helper to check if URL is from our CDN
-  const isFromCDN = (url: string): boolean => {
+  const isFromCDN = useCallback((url: string): boolean => {
     if (!cdnBaseUrl) return false
     try {
       const imageUrl = new URL(url)
@@ -156,36 +156,63 @@ function ImageProcessorPlugin() {
     } catch {
       return false
     }
-  }
+  }, [cdnBaseUrl])
   
-  // Process a single image node - upload if not from CDN
-  const processImageNode = async (imageNode: ImageNode) => {
-    const src = imageNode.getSrc()
+  // Register node transform to catch ALL image nodes
+  useEffect(() => {
+    if (!editor || !cdnBaseUrl) return
     
-    // Skip if already from CDN, blob, or data URI
-    if (isFromCDN(src) || src.startsWith('blob:') || src.startsWith('data:')) {
-      return
-    }
+    console.log('✅ Registering image node transform')
     
-    console.log('⬆️ Processing external image:', src)
-    
-    try {
-      // Check if this is a Gmail attachment URL
-      const gmailAttachmentInfo = parseGmailAttachmentUrl(src)
+    // Process a single image node - upload if not from CDN
+    const processImageNode = async (imageNode: ImageNode) => {
+      const src = imageNode.getSrc()
       
-      if (gmailAttachmentInfo) {
-        console.log('📧 Processing Gmail attachment via Gmail API')
+      // Skip if already from CDN, blob, or data URI
+      if (isFromCDN(src) || src.startsWith('blob:') || src.startsWith('data:')) {
+        return
+      }
+      
+      console.log('⬆️ Processing external image:', src)
+      
+      try {
+        // Check if this is a Gmail attachment URL
+        const gmailAttachmentInfo = parseGmailAttachmentUrl(src)
         
-        // Use Gmail API to fetch the attachment
-        const blob = await gmailClient.fetchAttachment(gmailAttachmentInfo)
-        
-        if (blob) {
-          console.log('✅ Gmail attachment fetched successfully')
+        if (gmailAttachmentInfo) {
+          console.log('📧 Processing Gmail attachment via Gmail API')
           
-          // Upload the blob via our file upload API
-          const file = new File([blob], 'gmail-attachment.jpg', { type: blob.type || 'image/jpeg' })
-          const asset = await assetsAPI.uploadFile(file)
-          console.log('✅ Gmail attachment processed to CDN:', asset.url)
+          // Use Gmail API to fetch the attachment
+          const blob = await gmailClient.fetchAttachment(gmailAttachmentInfo)
+          
+          if (blob) {
+            console.log('✅ Gmail attachment fetched successfully')
+            
+            // Upload the blob via our file upload API
+            const file = new File([blob], 'gmail-attachment.jpg', { type: blob.type || 'image/jpeg' })
+            const asset = await assetsAPI.uploadFile(file)
+            console.log('✅ Gmail attachment processed to CDN:', asset.url)
+            
+            // Replace the image node with CDN version
+            editor.update(() => {
+              const newImageNode = $createImageNode({
+                src: asset.url,
+                altText: imageNode.getAltText(),
+                width: asset.width,
+                height: asset.height,
+              })
+              
+              imageNode.replace(newImageNode)
+              console.log('🔄 Gmail image node replaced with CDN version')
+            })
+          } else {
+            console.error('❌ Failed to fetch Gmail attachment')
+          }
+          
+        } else {
+          // Regular external image - use URL upload
+          const asset = await assetsAPI.uploadFromURL(src)
+          console.log('✅ Image processed successfully:', asset.url)
           
           // Replace the image node with CDN version
           editor.update(() => {
@@ -197,41 +224,14 @@ function ImageProcessorPlugin() {
             })
             
             imageNode.replace(newImageNode)
-            console.log('🔄 Gmail image node replaced with CDN version')
+            console.log('🔄 Image node replaced with CDN version')
           })
-        } else {
-          console.error('❌ Failed to fetch Gmail attachment')
         }
         
-      } else {
-        // Regular external image - use URL upload
-        const asset = await assetsAPI.uploadFromURL(src)
-        console.log('✅ Image processed successfully:', asset.url)
-        
-        // Replace the image node with CDN version
-        editor.update(() => {
-          const newImageNode = $createImageNode({
-            src: asset.url,
-            altText: imageNode.getAltText(),
-            width: asset.width,
-            height: asset.height,
-          })
-          
-          imageNode.replace(newImageNode)
-          console.log('🔄 Image node replaced with CDN version')
-        })
+      } catch (error) {
+        console.error('❌ Failed to process image:', src, error)
       }
-      
-    } catch (error) {
-      console.error('❌ Failed to process image:', src, error)
     }
-  }
-  
-  // Register node transform to catch ALL image nodes
-  useEffect(() => {
-    if (!editor || !cdnBaseUrl) return
-    
-    console.log('✅ Registering image node transform')
     
     const unregister = editor.registerNodeTransform(ImageNode, (node: ImageNode) => {
       // Process this image node (async, but that's ok)
@@ -239,12 +239,12 @@ function ImageProcessorPlugin() {
     })
     
     return unregister
-  }, [editor, cdnBaseUrl])
+  }, [editor, cdnBaseUrl, isFromCDN])
   
   return null
 }
 
-export function Editor({ onContentChange, onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, onRequestGmailAccess, initialContent }: EditorProps) {
+export function Editor({ onContentChange, onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, initialContent }: EditorProps) {
   const initialConfig = {
     namespace: 'FormatEditor',
     theme,
@@ -272,7 +272,7 @@ export function Editor({ onContentChange, onProcessAndCopy, transforming, copied
           copied={copied}
           hasContent={hasContent}
           hasGmailAccess={hasGmailAccess}
-          onRequestGmailAccess={onRequestGmailAccess}
+
         />
         
         <div className="editor-container">

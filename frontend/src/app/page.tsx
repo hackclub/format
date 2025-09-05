@@ -7,7 +7,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useAuth } from '@/hooks/useAuth'
 import { htmlAPI } from '@/lib/api'
 import { TransformResult } from '@/types'
-import { convertGmailAttachmentsToDataUris, hasGmailAttachments } from '@/lib/gmailAPI'
+
 import { useGmailAPI } from '@/hooks/useGmailAPI'
 import { useOAuthTokens } from '@/hooks/useOAuthTokens'
 
@@ -23,7 +23,7 @@ const Editor = dynamic(() => import('@/components/Editor'), {
 export default function HomePage() {
   useOAuthTokens() // Capture tokens from OAuth redirect
   const { user, logout } = useAuth()
-  const { hasGmailAccess, requestGmailAccess } = useGmailAPI()
+  const { hasGmailAccess } = useGmailAPI()
   const [content, setContent] = useState('')
   const [transforming, setTransforming] = useState(false)
   const [transformResult, setTransformResult] = useState<TransformResult | null>(null)
@@ -48,32 +48,9 @@ export default function HomePage() {
       setTransforming(true)
       setError(null)
       
-      // Step 1: Try Gmail API for attachment images if available
-      let htmlToProcess = content
-      
-      if (hasGmailAccess && hasGmailAttachments(content)) {
-        console.log('🔍 Gmail access available, processing attachments...')
-        try {
-          const gmailResult = await convertGmailAttachmentsToDataUris(content)
-          htmlToProcess = gmailResult.html
-          console.log(`📧 Gmail API: ${gmailResult.processed} processed, ${gmailResult.failed} failed`)
-        } catch (gmailError) {
-          console.error('Gmail API processing failed:', gmailError)
-          
-          // Show helpful error for permission issues
-          if (gmailError instanceof Error && gmailError.message.includes('403')) {
-            setError('Gmail API permissions needed - please sign out and sign in again to enable automatic image processing')
-          }
-          
-          // Continue with original HTML
-        }
-      } else if (hasGmailAttachments(content) && !hasGmailAccess) {
-        console.log('📧 Gmail attachments detected but no API access')
-      }
-      
-      // Step 2: Process and clean HTML
-      console.log('Processing HTML for copy:', htmlToProcess.substring(0, 200) + '...')
-      const result = await htmlAPI.transform(htmlToProcess)
+      // Process and clean HTML - all images should already be processed by ImageProcessorPlugin
+      console.log('Processing HTML for copy:', content.substring(0, 200) + '...')
+      const result = await htmlAPI.transform(content)
       console.log('Transform result:', result)
       
       // Ensure the result has the expected structure
@@ -133,7 +110,7 @@ export default function HomePage() {
             copied={copied}
             hasContent={!!content.trim()}
             hasGmailAccess={hasGmailAccess}
-            onRequestGmailAccess={requestGmailAccess}
+
             initialContent={content}
           />
 

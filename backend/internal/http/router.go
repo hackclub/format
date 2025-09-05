@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -337,8 +339,25 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
 	// For any non-API routes, serve the main HTML page (SPA)
 	w.Header().Set("Content-Type", "text/html")
 	
-	// Next.js App Router HTML shell
-	html := `<!DOCTYPE html>
+	// Read the actual build manifest to get correct chunk names
+	manifest, err := s.readBuildManifest()
+	if err != nil {
+		s.logger.Error().Err(err).Msg("failed to read build manifest")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Build script tags for the root main files
+	scriptTags := ""
+	if len(manifest.PolyfillFiles) > 0 {
+		scriptTags += fmt.Sprintf(`    <script src="/_next/static/%s" nomodule=""></script>%s`, manifest.PolyfillFiles[0], "\n")
+	}
+	for _, file := range manifest.RootMainFiles {
+		scriptTags += fmt.Sprintf(`    <script src="/_next/static/%s"></script>%s`, file, "\n")
+	}
+	
+	// Next.js App Router HTML shell with dynamic chunks
+	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -349,16 +368,37 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <div id="__next"></div>
-    <script src="/_next/static/chunks/polyfills-42372ed130431b0a.js" nomodule=""></script>
-    <script src="/_next/static/chunks/webpack-ac9a027431ef0133.js"></script>
-    <script src="/_next/static/chunks/fd9d1056-e6fad75ea1edeaa8.js"></script>
-    <script src="/_next/static/chunks/117-37af661815ca3999.js"></script>
-    <script src="/_next/static/chunks/main-app-e0137810acce9719.js"></script>
-</body>
-</html>`
+%s</body>
+</html>`, scriptTags)
 	
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(html))
+}
+
+type BuildManifest struct {
+	PolyfillFiles []string `json:"polyfillFiles"`
+	RootMainFiles []string `json:"rootMainFiles"`
+}
+
+func (s *Server) readBuildManifest() (*BuildManifest, error) {
+	file, err := os.Open("./build-manifest.json")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	
+	var manifest BuildManifest
+	err = json.Unmarshal(data, &manifest)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &manifest, nil
 }
 
 func (s *Server) HandleHTMLTransform(w http.ResponseWriter, r *http.Request) {

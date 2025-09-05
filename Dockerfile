@@ -49,6 +49,7 @@ COPY --from=backend-builder /app/backend/server .
 COPY --from=frontend-builder /app/frontend/.next/static ./static
 COPY --from=frontend-builder /app/frontend/public ./public
 COPY --from=frontend-builder /app/frontend/.next/build-manifest.json ./build-manifest.json
+COPY --from=frontend-builder /app/frontend/.next/app-build-manifest.json ./app-build-manifest.json
 
 # Set ownership
 RUN chown -R app:app /app

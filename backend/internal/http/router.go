@@ -89,7 +89,14 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/healthz", s.HealthCheck)
 
 	// Serve static files from Next.js build
-	r.Handle("/_next/static/*", http.StripPrefix("/_next/static/", http.FileServer(http.Dir("./static"))))
+	fileServer := http.FileServer(http.Dir("./static"))
+	r.Handle("/_next/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set correct MIME type for CSS files
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		}
+		http.StripPrefix("/_next/static/", fileServer).ServeHTTP(w, r)
+	}))
 	r.Handle("/favicon.svg", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./public/favicon.svg")
 	}))
@@ -339,24 +346,58 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
 	// For any non-API routes, serve the main HTML page (SPA)
 	w.Header().Set("Content-Type", "text/html")
 	
-	// Read the actual build manifest to get correct chunk names
-	manifest, err := s.readBuildManifest()
+	// Read the actual build manifests
+	buildManifest, err := s.readBuildManifest()
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to read build manifest")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	
-	// Build script tags for the root main files
-	scriptTags := ""
-	if len(manifest.PolyfillFiles) > 0 {
-		scriptTags += fmt.Sprintf(`    <script src="/_next/%s" nomodule=""></script>%s`, manifest.PolyfillFiles[0], "\n")
+	appManifest, err := s.readAppBuildManifest()
+	if err != nil {
+		s.logger.Error().Err(err).Msg("failed to read app build manifest")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
-	for _, file := range manifest.RootMainFiles {
+	
+	// Build CSS links from app manifest layout
+	cssLinks := ""
+	if layoutFiles, ok := appManifest.Pages["/layout"]; ok {
+		for _, file := range layoutFiles {
+			if strings.HasSuffix(file, ".css") {
+				cssLinks += fmt.Sprintf(`    <link rel="stylesheet" href="/_next/%s">%s`, file, "\n")
+			}
+		}
+	}
+	
+	// Build script tags for root main files and app chunks
+	scriptTags := ""
+	if len(buildManifest.PolyfillFiles) > 0 {
+		scriptTags += fmt.Sprintf(`    <script src="/_next/%s" nomodule=""></script>%s`, buildManifest.PolyfillFiles[0], "\n")
+	}
+	for _, file := range buildManifest.RootMainFiles {
 		scriptTags += fmt.Sprintf(`    <script src="/_next/%s"></script>%s`, file, "\n")
 	}
 	
-	// Next.js App Router HTML shell with dynamic chunks
+	// Add layout and page specific scripts
+	if layoutFiles, ok := appManifest.Pages["/layout"]; ok {
+		for _, file := range layoutFiles {
+			if strings.HasSuffix(file, ".js") && !strings.Contains(file, "webpack") && !strings.Contains(file, "main-app") {
+				scriptTags += fmt.Sprintf(`    <script src="/_next/%s"></script>%s`, file, "\n")
+			}
+		}
+	}
+	
+	if pageFiles, ok := appManifest.Pages["/page"]; ok {
+		for _, file := range pageFiles {
+			if strings.HasSuffix(file, ".js") && strings.Contains(file, "app/page") {
+				scriptTags += fmt.Sprintf(`    <script src="/_next/%s"></script>%s`, file, "\n")
+			}
+		}
+	}
+	
+	// Next.js App Router HTML shell with CSS and dynamic chunks
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -365,11 +406,11 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
     <title>Format - Hack Club</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <meta name="next-head-count" content="4">
-</head>
+%s</head>
 <body>
     <div id="__next"></div>
 %s</body>
-</html>`, scriptTags)
+</html>`, cssLinks, scriptTags)
 	
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(html))
@@ -378,6 +419,10 @@ func (s *Server) HandleSPA(w http.ResponseWriter, r *http.Request) {
 type BuildManifest struct {
 	PolyfillFiles []string `json:"polyfillFiles"`
 	RootMainFiles []string `json:"rootMainFiles"`
+}
+
+type AppBuildManifest struct {
+	Pages map[string][]string `json:"pages"`
 }
 
 func (s *Server) readBuildManifest() (*BuildManifest, error) {
@@ -393,6 +438,27 @@ func (s *Server) readBuildManifest() (*BuildManifest, error) {
 	}
 	
 	var manifest BuildManifest
+	err = json.Unmarshal(data, &manifest)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &manifest, nil
+}
+
+func (s *Server) readAppBuildManifest() (*AppBuildManifest, error) {
+	file, err := os.Open("./app-build-manifest.json")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	
+	var manifest AppBuildManifest
 	err = json.Unmarshal(data, &manifest)
 	if err != nil {
 		return nil, err

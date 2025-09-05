@@ -77,47 +77,35 @@ class GmailAPIClient {
       }
 
       console.log('📧 Fetching Gmail attachment via API:', info.messageId, info.attachmentId)
-      console.log('📧 Trying message ID format:', info.messageId)
 
-      // Try different message ID formats
-      const messageIds = [
-        info.messageId, // Original: 1842260674151743696
-        `msg-f:${info.messageId}`, // With prefix: msg-f:1842260674151743696
-        info.messageId.toString(16), // Hex format
-      ]
+      // Gmail API always requires "msg-f:" prefix for message IDs
+      const apiMessageId = `msg-f:${info.messageId}`
+      console.log('📧 Using message ID format:', apiMessageId)
 
-      let message = null
-      let successfulMessageId = ''
-
-      for (const msgId of messageIds) {
-        console.log(`🔄 Trying message ID format: ${msgId}`)
-        
-        // Get the message first
-        const messageResponse = await fetch(
-          `https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(msgId)}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            }
+      // Get the message
+      const messageResponse = await fetch(
+        `https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(apiMessageId)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
           }
-        )
-
-        console.log(`📧 Response for ${msgId}: ${messageResponse.status}`)
-
-        if (messageResponse.ok) {
-          message = await messageResponse.json()
-          successfulMessageId = msgId
-          console.log('✅ Found message with ID:', msgId)
-          break
-        } else {
-          const errorText = await messageResponse.text()
-          console.log(`❌ Failed for ${msgId}:`, messageResponse.status, errorText.substring(0, 200))
         }
+      )
+
+      console.log(`📧 Response: ${messageResponse.status}`)
+
+      if (!messageResponse.ok) {
+        if (messageResponse.status === 403) {
+          throw new Error(`Gmail API access denied (403) - please sign out and sign in again to grant Gmail permissions`)
+        }
+        const errorText = await messageResponse.text()
+        console.log(`❌ Gmail API error:`, messageResponse.status, errorText.substring(0, 200))
+        throw new Error(`Failed to fetch message: ${messageResponse.status}`)
       }
 
-      if (!message) {
-        throw new Error(`Message not found with any ID format tried`)
-      }
+      const message = await messageResponse.json()
+      console.log('✅ Found message with API format')
+      const successfulMessageId = apiMessageId
       
       console.log('📧 Message structure - payload keys:', Object.keys(message.payload))
       console.log('📧 Looking for attachment ID:', info.attachmentId)
@@ -136,13 +124,19 @@ class GmailAPIClient {
         })
       }
       
-      // Find the attachment in the message parts (search for image attachments)
-      const attachmentBodyId = this.findImageAttachmentBodyId(message.payload)
+      // Find the attachment in the message parts using the correct attachmentId
+      let attachmentBodyId = this.findAttachmentBodyId(message.payload, info.attachmentId)
       if (!attachmentBodyId) {
-        throw new Error('No image attachment found in message')
+        // As a fallback, try to find any image if the specific ID fails (sometimes realattid is weird)
+        const fallbackBodyId = this.findImageAttachmentBodyId(message.payload)
+        if (!fallbackBodyId) {
+          throw new Error(`Attachment with ID ${info.attachmentId} not found in message`)
+        }
+        console.log(`⚠️ Could not find specific attachment ID, falling back to first image: ${fallbackBodyId}`)
+        attachmentBodyId = fallbackBodyId
+      } else {
+        console.log('✅ Found specific attachment with body ID:', attachmentBodyId)
       }
-      
-      console.log('✅ Found image attachment with ID:', attachmentBodyId)
 
       // Fetch the actual attachment data using the successful message ID
       const attachmentResponse = await fetch(

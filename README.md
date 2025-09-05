@@ -66,8 +66,9 @@ HOST_PORT=9000 docker-compose up -d app
 # Or set in .env file
 HOST_PORT=9000
 NGINX_HTTP_PORT=8080
-NGINX_HTTPS_PORT=8443
 ```
+
+**Note:** HTTPS is handled by your reverse proxy (Cloudflare, nginx, etc.), not by the container.
 
 ### Production with Nginx
 ```bash

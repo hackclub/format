@@ -45,11 +45,9 @@ WORKDIR /app
 # Copy backend binary
 COPY --from=backend-builder /app/backend/server .
 
-# Copy frontend static files
-COPY --from=frontend-builder /app/frontend/.next/static ./static
+# Copy entire Next.js build output
+COPY --from=frontend-builder /app/frontend/.next ./.next
 COPY --from=frontend-builder /app/frontend/public ./public
-COPY --from=frontend-builder /app/frontend/.next/build-manifest.json ./build-manifest.json
-COPY --from=frontend-builder /app/frontend/.next/app-build-manifest.json ./app-build-manifest.json
 
 # Set ownership
 RUN chown -R app:app /app

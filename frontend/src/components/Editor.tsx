@@ -172,13 +172,20 @@ function ImageProcessorPlugin() {
       
       try {
         // Check if this is a Gmail attachment URL
-        const gmailAttachmentInfo = parseGmailAttachmentUrl(src)
+        const gmailAttachmentInfo = parseGmailAttachmentUrl(src, {
+          alt: imageNode.getAltText() || ''
+        })
         
         if (gmailAttachmentInfo) {
           console.log('📧 Processing Gmail attachment via Gmail API')
           
-          // Use Gmail API to fetch the attachment
-          const blob = await gmailClient.fetchAttachment(gmailAttachmentInfo)
+          // Use Gmail API to fetch the attachment with context
+          const blob = await gmailClient.fetchAttachment({
+            ...gmailAttachmentInfo,
+            context: {
+              alt: imageNode.getAltText() || ''
+            }
+          })
           
           if (blob) {
             console.log('✅ Gmail attachment fetched successfully')

@@ -69,7 +69,7 @@ class GmailAPIClient {
     return this.tokens!.access_token
   }
 
-  async fetchAttachment(info: GmailAttachmentInfo): Promise<Blob | null> {
+  async fetchAttachment(info: GmailAttachmentInfo & { context?: { filename?: string, alt?: string } }): Promise<Blob | null> {
     try {
       const accessToken = await this.getValidAccessToken()
       if (!accessToken) {
@@ -78,8 +78,8 @@ class GmailAPIClient {
 
       console.log('📧 Fetching Gmail attachment via API:', info.messageId, info.attachmentId)
 
-      // Gmail API always requires "msg-f:" prefix for message IDs
-      const apiMessageId = `msg-f:${info.messageId}`
+      // Use the original message ID format from the URL (msg-f: or msg-a:)
+      const apiMessageId = info.messageId
       console.log('📧 Using message ID format:', apiMessageId)
 
       // Get the message
@@ -124,8 +124,8 @@ class GmailAPIClient {
         })
       }
       
-      // Find the attachment in the message parts using the correct attachmentId
-      let attachmentBodyId = this.findAttachmentBodyId(message.payload, info.attachmentId)
+      // Find the attachment in the message parts using the correct attachmentId and context
+      let attachmentBodyId = this.findAttachmentBodyId(message.payload, info.attachmentId, info.context)
       if (!attachmentBodyId) {
         // As a fallback, try to find any image if the specific ID fails (sometimes realattid is weird)
         const fallbackBodyId = this.findImageAttachmentBodyId(message.payload)
@@ -186,7 +186,7 @@ class GmailAPIClient {
     return null
   }
 
-  private findAttachmentBodyId(part: any, target: string): string | null {
+  private findAttachmentBodyId(part: any, target: string, context?: { filename?: string, alt?: string }): string | null {
     // Match the UI's realattid=ii_... against the header
     const xAtt = part.headers?.find(
       (h: any) => h.name?.toLowerCase() === 'x-attachment-id'
@@ -198,9 +198,35 @@ class GmailAPIClient {
     if (part.body?.attachmentId === target) {
       return part.body.attachmentId;
     }
+    
+    // Smart matching using context clues when direct ID fails
+    if (context && part.body?.attachmentId && part.mimeType?.startsWith('image/')) {
+      // Match by filename if provided
+      if (context.filename && part.filename) {
+        const contextName = context.filename.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const partName = part.filename.toLowerCase().replace(/[^a-z0-9]/g, '')
+        if (contextName === partName || contextName.includes(partName) || partName.includes(contextName)) {
+          console.log('🎯 Found attachment by filename match:', part.filename, '≈', context.filename)
+          return part.body.attachmentId
+        }
+      }
+      
+      // Match by image dimensions or other attributes from context
+      if (context.alt && context.alt.length > 10) {
+        // If alt text contains meaningful content that might match Content-ID or description
+        const altWords = context.alt.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+        const filenameWords = (part.filename || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3)
+        const commonWords = altWords.filter(word => filenameWords.some(fword => fword.includes(word) || word.includes(fword)))
+        if (commonWords.length > 0) {
+          console.log('🎯 Found attachment by alt text similarity:', commonWords)
+          return part.body.attachmentId
+        }
+      }
+    }
+    
     if (part.parts) {
       for (const sub of part.parts) {
-        const found = this.findAttachmentBodyId(sub, target);
+        const found = this.findAttachmentBodyId(sub, target, context);
         if (found) return found;
       }
     }
@@ -218,7 +244,7 @@ class GmailAPIClient {
 // Global instance
 export const gmailClient = new GmailAPIClient()
 
-export function parseGmailAttachmentUrl(url: string): GmailAttachmentInfo | null {
+export function parseGmailAttachmentUrl(url: string, context?: { filename?: string, alt?: string, imgTag?: string }): GmailAttachmentInfo | null {
   try {
     // Decode HTML entities first
     const decodedUrl = url
@@ -248,8 +274,8 @@ export function parseGmailAttachmentUrl(url: string): GmailAttachmentInfo | null
       return null
     }
     
-    // Convert permmsgid format (msg-f:1842260674151743696) to just the ID
-    const messageId = permmsgid.replace('msg-f:', '').replace('msg-a:', '')
+    // Preserve the original message ID format (msg-f: or msg-a:)
+    const messageId = permmsgid
     
     const result = {
       messageId,

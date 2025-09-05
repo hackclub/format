@@ -11,6 +11,7 @@ Things to test:
 - Pasting rich HTML from Gmail with image attachments
 - Pasting image directly from local fileystem
 - Pasting image from a website
+- Pasting from Gmail an email with multiple different images in it and make sure they all come through
 
 ## Architecture
 

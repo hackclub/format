@@ -83,8 +83,8 @@ func main() {
 	// Initialize asset handler
 	assetHandler := assets.NewHandler(assetService, logger)
 
-	// Initialize HTML transformer
-	htmlTransformer := html.NewTransformer(assetService)
+	// Initialize HTML transformer (use configured CDN base)
+	htmlTransformer := html.NewTransformer(assetService, cfg.R2PublicBaseURL)
 
 	// Initialize HTTP server
 	server := httphandler.NewServer(

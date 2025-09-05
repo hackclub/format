@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/hackclub/format/internal/session"
 	"github.com/rs/zerolog"
 )
@@ -140,9 +141,8 @@ func (h *Handler) HandleBatch(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetAsset handles retrieving asset metadata by ID/key
 func (h *Handler) HandleGetAsset(w http.ResponseWriter, r *http.Request) {
-	// Extract ID from URL path
-	path := strings.TrimPrefix(r.URL.Path, "/api/assets/")
-	if path == "" {
+	key := chi.URLParam(r, "*")
+	if key == "" {
 		http.Error(w, "Asset ID required", http.StatusBadRequest)
 		return
 	}
@@ -151,7 +151,7 @@ func (h *Handler) HandleGetAsset(w http.ResponseWriter, r *http.Request) {
 	// In a full implementation, you'd look up the asset metadata from storage
 	h.writeJSONResponse(w, map[string]string{
 		"message": "Asset metadata endpoint - not fully implemented",
-		"id":      path,
+		"id":      key,
 	})
 }
 

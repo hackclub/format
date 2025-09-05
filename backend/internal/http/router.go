@@ -87,7 +87,8 @@ func (s *Server) Routes() http.Handler {
 		// Assets
 		r.Post("/assets", s.assetHandler.HandleUpload)
 		r.Post("/assets/batch", s.assetHandler.HandleBatch)
-		r.Get("/assets/{id}", s.assetHandler.HandleGetAsset)
+		// Accept sharded keys like ab/xxxxxxxx.jpg
+		r.Get("/assets/*", s.assetHandler.HandleGetAsset)
 
 		// HTML transformation
 		r.Post("/html/transform", s.HandleHTMLTransform)
@@ -207,6 +208,7 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		HD:      claims.HD,
 	}
 
+	// Create user session (essential for authentication)
 	err = s.sessionManager.SetUser(w, r, user)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to set user session")
@@ -215,14 +217,6 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info().Str("email", user.Email).Str("domain", user.HD).Msg("user logged in")
-
-	// Create user session (essential for authentication)
-	err = s.sessionManager.SetUser(w, r, user)
-	if err != nil {
-		s.logger.Error().Err(err).Msg("failed to set user session")
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
-		return
-	}
 
 	// Also pass OAuth tokens to frontend via URL fragment for Gmail API access
 	expiresIn := int64(3600) // Default fallback

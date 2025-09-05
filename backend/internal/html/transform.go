@@ -12,6 +12,7 @@ import (
 
 type Transformer struct {
 	assetService *assets.Service
+	cdnHost      string
 }
 
 type TransformRequest struct {
@@ -31,9 +32,14 @@ type Stats struct {
 	ScriptsRemoved  int `json:"scripts_removed"`
 }
 
-func NewTransformer(assetService *assets.Service) *Transformer {
+func NewTransformer(assetService *assets.Service, cdnBaseURL string) *Transformer {
+	host := ""
+	if u, err := url.Parse(cdnBaseURL); err == nil {
+		host = u.Host
+	}
 	return &Transformer{
 		assetService: assetService,
+		cdnHost:      host,
 	}
 }
 
@@ -78,9 +84,11 @@ func (t *Transformer) processImages(ctx context.Context, html string) (string, S
 		fullImgTag := match[0]
 		srcURL := match[1]
 
-		// Skip if already using our CDN
-		if strings.Contains(srcURL, "i.format.hackclub.com") {
-			continue
+		// Skip if already on our CDN
+		if t.cdnHost != "" {
+			if u, err := url.Parse(srcURL); err == nil && u.Host == t.cdnHost {
+				continue
+			}
 		}
 
 		// Handle blob URLs (Gmail draft images)
@@ -116,7 +124,12 @@ func (t *Transformer) processImages(ctx context.Context, html string) (string, S
 			continue
 		}
 
-		messages = append(messages, fmt.Sprintf("Image rehosted: %s -> %s", srcURL[:min(50, len(srcURL))], asset.URL))
+		// One message per image
+		if asset.Deduped {
+			messages = append(messages, fmt.Sprintf("Image deduplicated: %s", asset.URL))
+		} else {
+			messages = append(messages, fmt.Sprintf("Image rehosted: %s -> %s", srcURL[:min(50, len(srcURL))], asset.URL))
+		}
 
 		// Replace the src in the img tag
 		newImgTag := srcRegex.ReplaceAllString(fullImgTag, fmt.Sprintf(`src="%s"`, asset.URL))
@@ -131,12 +144,6 @@ func (t *Transformer) processImages(ctx context.Context, html string) (string, S
 
 		html = strings.Replace(html, fullImgTag, newImgTag, 1)
 		stats.ImagesRehosted++
-
-		if asset.Deduped {
-			messages = append(messages, fmt.Sprintf("Image deduplicated: %s", asset.URL))
-		} else {
-			messages = append(messages, fmt.Sprintf("Image rehosted: %s", asset.URL))
-		}
 	}
 
 	return html, stats, messages

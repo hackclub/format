@@ -367,7 +367,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
               <span>Processing...</span>
             </div>
           ) : (
-            '📋 Copy'
+            '📋 Copy For Gmail'
           )}
         </button>
       )}

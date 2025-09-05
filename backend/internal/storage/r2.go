@@ -31,6 +31,11 @@ func NewR2Client(ctx context.Context, accountID, accessKeyID, secretAccessKey, b
 	// Create custom credentials
 	creds := credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")
 	
+	// Use accountID to build default endpoint if not provided
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	}
+	
 	// Create AWS config for R2
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(creds),

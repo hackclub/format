@@ -68,6 +68,9 @@ func (s *Server) Routes() http.Handler {
 	// Health check
 	r.Get("/healthz", s.HealthCheck)
 
+	// Public config endpoint (no auth required)
+	r.Get("/api/config", s.HandleConfig)
+	
 	// Authentication routes (no auth required)
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Get("/login", s.HandleLogin)
@@ -142,6 +145,14 @@ func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"version":   "1.0.0",
 	})
 }
+
+func (s *Server) HandleConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"cdnBaseUrl": s.config.R2PublicBaseURL,
+	})
+}
+
 
 func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	state := auth.GenerateState()

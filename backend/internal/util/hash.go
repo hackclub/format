@@ -13,15 +13,16 @@ func HashBytes(data []byte) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-// Base32Key creates a shorter key from hash using base32
+// Base32Key creates a secure key from hash using base32
+// Uses 26 characters (130 bits) to prevent brute force attacks
 func Base32Key(data []byte, ext string) string {
 	hash := sha256.Sum256(data)
 	encoder := base32.StdEncoding.WithPadding(base32.NoPadding)
 	encoded := encoder.EncodeToString(hash[:])
 	
-	// Take first 9 chars and make lowercase for consistency
-	key := strings.ToLower(encoded)[:9]
+	// Take 26 chars for 130 bits of entropy (collision-resistant and brute-force proof)
+	key := strings.ToLower(encoded)[:26]
 	
-	// Shard by first two chars
-	return fmt.Sprintf("%s/%s%s", key[:2], key[2:], ext)
+	// Long directory name (20 chars), short filename (6 chars)
+	return fmt.Sprintf("%s/%s%s", key[:20], key[20:], ext)
 }

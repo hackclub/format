@@ -149,27 +149,25 @@ func (p *Processor) Process(data []byte, originalContentType string) (*ProcessRe
 
 func calculateDimensionsWithMax(originalWidth, originalHeight, maxDimension int) (int, int) {
 	// Calculate new dimensions maintaining aspect ratio with a maximum dimension
-	aspectRatio := float64(originalWidth) / float64(originalHeight)
-	
 	var newWidth, newHeight int
 	
-	if originalWidth > originalHeight {
-		// Landscape - limit by width
-		newWidth = maxDimension
-		newHeight = int(float64(newWidth) / aspectRatio)
-	} else {
-		// Portrait or square - limit by height  
-		newHeight = maxDimension
-		newWidth = int(float64(newHeight) * aspectRatio)
+	// Scale based on whichever dimension exceeds the limit more
+	widthScale := float64(maxDimension) / float64(originalWidth)
+	heightScale := float64(maxDimension) / float64(originalHeight)
+	
+	// Use the more restrictive scale (smaller scale factor)
+	scale := widthScale
+	if heightScale < widthScale {
+		scale = heightScale
 	}
 	
-	// Ensure we don't exceed original dimensions (no upscaling)
-	if newWidth > originalWidth {
-		newWidth = originalWidth
+	// Only scale down if we need to (don't upscale)
+	if scale >= 1.0 {
+		return originalWidth, originalHeight
 	}
-	if newHeight > originalHeight {
-		newHeight = originalHeight
-	}
+	
+	newWidth = int(float64(originalWidth) * scale)
+	newHeight = int(float64(originalHeight) * scale)
 	
 	return newWidth, newHeight
 }

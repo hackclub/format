@@ -33,7 +33,11 @@ export function useAuth() {
   const logout = async () => {
     try {
       await authAPI.logout()
+      // Clear any stored Gmail tokens
+      localStorage.removeItem('gmail_tokens')
       setUser(null)
+      // Force reload to ensure clean state
+      window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to logout')
     }

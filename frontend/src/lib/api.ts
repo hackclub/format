@@ -101,3 +101,11 @@ export const htmlAPI = {
     })
   },
 }
+
+// Config API
+export const configAPI = {
+  async getConfig(): Promise<{ cdnBaseUrl: string }> {
+    return apiRequest<{ cdnBaseUrl: string }>('/config')
+  },
+}
+

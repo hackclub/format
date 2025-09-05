@@ -5,8 +5,11 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Format - Clean HTML for Gmail',
+  title: 'format.hackclub.com',
   description: 'Paste, clean, and copy HTML content optimized for Gmail with image rehosting',
+  icons: {
+    icon: '/favicon.svg',
+  }
 }
 
 export default function RootLayout({

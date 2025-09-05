@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html'
-import { $getRoot, $getSelection, COMMAND_PRIORITY_HIGH, PASTE_COMMAND } from 'lexical'
+import { $getRoot, $getSelection, COMMAND_PRIORITY_CRITICAL, PASTE_COMMAND, COMMAND_PRIORITY_HIGH } from 'lexical'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
@@ -21,10 +21,11 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text'
 import { ListItemNode, ListNode } from '@lexical/list'
 import { CodeHighlightNode, CodeNode } from '@lexical/code'
 import { LinkNode, AutoLinkNode } from '@lexical/link'
-import { ImageNode } from './ImageNode'
+import { ImageNode, $createImageNode } from './ImageNode'
 
 import DOMPurify from 'dompurify'
-import { htmlAPI } from '@/lib/api'
+import { htmlAPI, assetsAPI, configAPI } from '@/lib/api'
+import { parseGmailAttachmentUrl, gmailClient } from '@/lib/gmailAPI'
 import { TransformResult } from '@/types'
 import { EditorToolbar } from './EditorToolbar'
 import { KeyboardShortcutsPlugin } from './KeyboardShortcutsPlugin'
@@ -128,79 +129,117 @@ function MyOnChangePlugin({ onChange }: { onChange: (html: string) => void }) {
   return null
 }
 
-function PastePlugin() {
+// Unified Image Processor Plugin - handles ALL image nodes consistently
+function ImageProcessorPlugin() {
   const [editor] = useLexicalComposerContext()
+  const [cdnBaseUrl, setCdnBaseUrl] = useState<string | null>(null)
   
+  // Load CDN config on mount
   useEffect(() => {
-    return editor.registerCommand(
-      PASTE_COMMAND,
-      (event: ClipboardEvent) => {
-        const clipboardData = event.clipboardData
-        if (!clipboardData) return false
+    configAPI.getConfig()
+      .then(config => {
+        setCdnBaseUrl(config.cdnBaseUrl)
+        console.log('📡 CDN Base URL loaded:', config.cdnBaseUrl)
+      })
+      .catch(error => {
+        console.error('❌ Failed to load CDN config:', error)
+      })
+  }, [])
+  
+  // Helper to check if URL is from our CDN
+  const isFromCDN = (url: string): boolean => {
+    if (!cdnBaseUrl) return false
+    try {
+      const imageUrl = new URL(url)
+      const cdnUrl = new URL(cdnBaseUrl)
+      return imageUrl.hostname === cdnUrl.hostname
+    } catch {
+      return false
+    }
+  }
+  
+  // Process a single image node - upload if not from CDN
+  const processImageNode = async (imageNode: ImageNode) => {
+    const src = imageNode.getSrc()
+    
+    // Skip if already from CDN, blob, or data URI
+    if (isFromCDN(src) || src.startsWith('blob:') || src.startsWith('data:')) {
+      return
+    }
+    
+    console.log('⬆️ Processing external image:', src)
+    
+    try {
+      // Check if this is a Gmail attachment URL
+      const gmailAttachmentInfo = parseGmailAttachmentUrl(src)
+      
+      if (gmailAttachmentInfo) {
+        console.log('📧 Processing Gmail attachment via Gmail API')
         
-        const htmlData = clipboardData.getData('text/html')
-        if (htmlData) {
-          console.log('Pasting HTML with length:', htmlData.length)
+        // Use Gmail API to fetch the attachment
+        const blob = await gmailClient.fetchAttachment(gmailAttachmentInfo)
+        
+        if (blob) {
+          console.log('✅ Gmail attachment fetched successfully')
           
-          // Preprocess to preserve blank line paragraphs properly
-          let preprocessedHtml = htmlData
+          // Upload the blob via our file upload API
+          const file = new File([blob], 'gmail-attachment.jpg', { type: blob.type || 'image/jpeg' })
+          const asset = await assetsAPI.uploadFile(file)
+          console.log('✅ Gmail attachment processed to CDN:', asset.url)
           
-          // Remove Gmail wrapper spans that can interfere with structure
-          preprocessedHtml = preprocessedHtml.replace(/<span[^>]*class="im"[^>]*>/g, '')
-          preprocessedHtml = preprocessedHtml.replace(/<\/span>/g, '')
-          
-          // Handle Gmail signature pattern: remove <br> immediately after '--'
-          preprocessedHtml = preprocessedHtml.replace(/<span[^>]*>--<\/span><br>/g, '<span>--</span>')
-          
-          // Also handle the div structure: <div><span>--</span><br></div><div>content</div>
-          preprocessedHtml = preprocessedHtml.replace(
-            /<div[^>]*><span[^>]*>--<\/span><br><\/div>\s*<div/g, 
-            '<div><span>--</span><br>'
-          )
-          
-          // Convert all <div><br></div> to proper paragraph breaks that Lexical understands
-          preprocessedHtml = preprocessedHtml.replace(/<div[^>]*><br><\/div>/g, '<p><br></p>')
-          
-          console.log('Preprocessed HTML length:', preprocessedHtml.length)
-          console.log('Signature area:', preprocessedHtml.match(/.{100}--{1,3}.{100}/)?.[0] || 'no -- found')
-          
-          // Sanitize the HTML
-          const sanitizedHtml = DOMPurify.sanitize(preprocessedHtml, {
-            ALLOWED_TAGS: [
-              'p', 'div', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li',
-              'blockquote', 'hr', 'pre', 'code', 'img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'b', 'i', 'span', 'font'
-            ],
-            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'width', 'height', 'style', 'class', 'dir', 'face', 'color'],
-          })
-          
-
-          
-          // Parse the HTML and insert it
-          const parser = new DOMParser()
-          const dom = parser.parseFromString(sanitizedHtml, 'text/html')
-          
+          // Replace the image node with CDN version
           editor.update(() => {
-            const nodes = $generateNodesFromDOM(editor, dom)
-            const root = $getRoot()
-            const selection = $getSelection()
+            const newImageNode = $createImageNode({
+              src: asset.url,
+              altText: imageNode.getAltText(),
+              width: asset.width,
+              height: asset.height,
+            })
             
-            if (selection) {
-              selection.insertNodes(nodes)
-            } else {
-              root.clear()
-              root.append(...nodes)
-            }
+            imageNode.replace(newImageNode)
+            console.log('🔄 Gmail image node replaced with CDN version')
           })
-          
-          event.preventDefault()
-          return true
+        } else {
+          console.error('❌ Failed to fetch Gmail attachment')
         }
         
-        return false
-      },
-      COMMAND_PRIORITY_HIGH
-    )
-  }, [editor])
+      } else {
+        // Regular external image - use URL upload
+        const asset = await assetsAPI.uploadFromURL(src)
+        console.log('✅ Image processed successfully:', asset.url)
+        
+        // Replace the image node with CDN version
+        editor.update(() => {
+          const newImageNode = $createImageNode({
+            src: asset.url,
+            altText: imageNode.getAltText(),
+            width: asset.width,
+            height: asset.height,
+          })
+          
+          imageNode.replace(newImageNode)
+          console.log('🔄 Image node replaced with CDN version')
+        })
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to process image:', src, error)
+    }
+  }
+  
+  // Register node transform to catch ALL image nodes
+  useEffect(() => {
+    if (!editor || !cdnBaseUrl) return
+    
+    console.log('✅ Registering image node transform')
+    
+    const unregister = editor.registerNodeTransform(ImageNode, (node: ImageNode) => {
+      // Process this image node (async, but that's ok)
+      processImageNode(node)
+    })
+    
+    return unregister
+  }, [editor, cdnBaseUrl])
   
   return null
 }
@@ -258,7 +297,7 @@ export function Editor({ onContentChange, onProcessAndCopy, transforming, copied
             <KeyboardShortcutsPlugin />
             <DragDropPlugin />
             <MyOnChangePlugin onChange={onContentChange} />
-            <PastePlugin />
+            <ImageProcessorPlugin />
           </div>
         </div>
       </LexicalComposer>

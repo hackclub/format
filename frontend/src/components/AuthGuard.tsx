@@ -40,18 +40,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Format</h1>
-            <p className="text-gray-600">
-              Clean HTML for Gmail with bulletproof image hosting
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">format.hackclub.com</h1>
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-xl font-semibold mb-4">Sign in to continue</h2>
-            <p className="text-gray-600 mb-6">
-              You need to sign in with your Hack Club account to use Format.
-            </p>
-            
             <button
               onClick={login}
               className="w-full bg-hack-red text-white px-4 py-3 rounded-lg hover:bg-red-600 transition-colors font-semibold"

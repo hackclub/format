@@ -10,7 +10,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/gen2brain/jpegli v0.3.4
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/go-chi/cors v1.2.1
+	github.com/go-chi/cors v1.2.2
 	github.com/gorilla/sessions v1.2.2
 	github.com/h2non/bimg v1.1.9
 	github.com/joho/godotenv v1.5.1

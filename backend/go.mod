@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.47.5
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/gen2brain/jpegli v0.3.4
-	github.com/go-chi/chi/v5 v5.0.11
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/cors v1.2.1
 	github.com/gorilla/sessions v1.2.2
 	github.com/h2non/bimg v1.1.9

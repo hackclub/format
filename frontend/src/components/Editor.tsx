@@ -19,9 +19,8 @@ import { ListItemNode, ListNode } from '@lexical/list'
 import { CodeHighlightNode, CodeNode } from '@lexical/code'
 import { LinkNode, AutoLinkNode } from '@lexical/link'
 import { ImageNode, $createImageNode } from './ImageNode'
-import { htmlAPI, assetsAPI, configAPI } from '@/lib/api'
+import { assetsAPI, configAPI } from '@/lib/api'
 import { parseGmailAttachmentUrl, gmailClient } from '@/lib/gmailAPI'
-import { TransformResult } from '@/types'
 import { EditorToolbar } from './EditorToolbar'
 import { KeyboardShortcutsPlugin } from './KeyboardShortcutsPlugin'
 import { DragDropPlugin } from './DragDropPlugin'
@@ -246,7 +245,7 @@ function ImageProcessorPlugin() {
   return null
 }
 
-export function Editor({ onContentChange, onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess, initialContent }: EditorProps) {
+export function Editor({ onContentChange, onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess }: EditorProps) {
   const initialConfig = {
     namespace: 'FormatEditor',
     theme,

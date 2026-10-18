@@ -16,7 +16,7 @@ import {
   $isListNode,
 } from '@lexical/list'
 import { $isHeadingNode } from '@lexical/rich-text'
-import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils'
+import { mergeRegister } from '@lexical/utils'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { $createImageNode } from './ImageNode'
 import { assetsAPI } from '@/lib/api'
@@ -42,7 +42,7 @@ interface EditorToolbarProps {
 
 }
 
-export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasContent, hasGmailAccess }: EditorToolbarProps) {
+export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasContent }: EditorToolbarProps) {
   const [editor] = useLexicalComposerContext()
   const [toolbarState, setToolbarState] = useState<ToolbarState>({
     isBold: false,
@@ -99,7 +99,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
         }))
       }
     }
-  }, [editor])
+  }, [])
   
   // Separate effect to handle link editor show/hide
   useEffect(() => {
@@ -152,7 +152,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
     editor.dispatchCommand(FORMAT_TEXT_COMMAND, format as any)
   }
 
-  const insertLink = () => {
+  const insertLink = useCallback(() => {
     if (!toolbarState.isLink) {
       // Creating new link
       setLinkUrl('')
@@ -175,7 +175,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
         }
       })
     }
-  }
+  }, [editor, toolbarState.isLink])
 
   const handleLinkSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -251,7 +251,7 @@ export function EditorToolbar({ onProcessAndCopy, transforming, copied, hasConte
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [insertLink])
 
   return (
     <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-10 bg-white border border-gray-300 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { gmailClient } from '@/lib/gmailAPI'
 import { testTokenAndFixPermissions } from '@/lib/tokenValidator'
 
@@ -8,11 +8,7 @@ export function useGmailAPI() {
   const [hasGmailAccess, setHasGmailAccess] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    checkGmailAccess()
-  }, [])
-
-  const checkGmailAccess = async () => {
+  const checkGmailAccess = useCallback(async () => {
     try {
       setLoading(true)
       const hasTokens = gmailClient.hasValidTokens()
@@ -52,7 +48,11 @@ export function useGmailAPI() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    checkGmailAccess()
+  }, [checkGmailAccess])
 
 
 

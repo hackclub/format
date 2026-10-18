@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: { root: __dirname },
+  outputFileTracingRoot: __dirname,
   async rewrites() {
     return [
       {
@@ -9,7 +11,7 @@ const nextConfig = {
     ]
   },
   images: {
-    domains: ['i.format.hackclub.com'],
+    remotePatterns: [{ protocol: 'https', hostname: 'i.format.hackclub.com' }],
   },
 }
 

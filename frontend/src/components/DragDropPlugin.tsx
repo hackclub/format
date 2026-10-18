@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { $insertNodes, $getSelection } from 'lexical'
+import { $getSelection } from 'lexical'
 import { $createImageNode } from './ImageNode'
 import { assetsAPI } from '@/lib/api'
 

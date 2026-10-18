@@ -53,7 +53,7 @@ make dev
 cd backend && $(go env GOPATH)/bin/air
 
 # Frontend 
-cd frontend && npm run dev
+cd frontend && bun run dev
 
 # Or without hot reload
 cd backend && go run cmd/server/main.go
@@ -117,10 +117,10 @@ go mod tidy                         # Clean up dependencies
 ### Frontend (Next.js)
 ```bash
 cd frontend
-npm run dev                         # Start development server
-npm run build                       # Build for production
-npm run type-check                  # Run TypeScript type checking
-npm run lint                        # Run ESLint
+bun run dev                         # Start development server
+bun run build                       # Build for production
+bun run type-check                  # Run TypeScript type checking
+bun run lint                        # Run Oxlint
 ```
 
 ### Combined Development
@@ -147,8 +147,8 @@ Gmail-Compatible HTML Output
 
 ## Core Technologies
 
-- **Backend**: Go 1.22+, chi router, bimg (libvips), Air hot reload
-- **Frontend**: Next.js 14, React 18, Lexical editor, TailwindCSS
+- **Backend**: Go 1.27+, chi router, bimg (libvips), Air hot reload
+- **Frontend**: Next.js 16, React 19, Lexical editor, TailwindCSS
 - **Authentication**: Google OAuth with Gmail API scope (client-side token storage)
 - **Image Processing**: libvips with intelligent format conversion (JPEG/PNG)
 - **Storage**: Cloudflare R2 with CDN and deduplication

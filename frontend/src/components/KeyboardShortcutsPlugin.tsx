@@ -3,26 +3,11 @@
 import { useEffect } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import {
-  KEY_ARROW_DOWN_COMMAND,
-  KEY_ARROW_UP_COMMAND,
-  KEY_ENTER_COMMAND,
-  COMMAND_PRIORITY_NORMAL,
   FORMAT_TEXT_COMMAND,
 } from 'lexical'
 
 export function KeyboardShortcutsPlugin() {
   const [editor] = useLexicalComposerContext()
-
-  useEffect(() => {
-    return editor.registerCommand(
-      KEY_ENTER_COMMAND,
-      (event: KeyboardEvent) => {
-        // Handle Enter key behavior
-        return false // Let default behavior handle it
-      },
-      COMMAND_PRIORITY_NORMAL
-    )
-  }, [editor])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

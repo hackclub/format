@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { AuthGuard } from '@/components/AuthGuard'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useAuth } from '@/hooks/useAuth'
 import { htmlAPI } from '@/lib/api'
 import { TransformResult } from '@/types'

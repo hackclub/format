@@ -115,7 +115,7 @@ func (p *Processor) Process(data []byte, originalContentType string) (*ProcessRe
     fmt.Printf("🔍 Transparency analysis: hasAlphaChannel=%t, hasRealTransparency=%t, shouldConvertToJPEG=%t\n", 
         metadata.Alpha, hasRealTransparency, shouldConvertToJPEG)
 
-    if shouldConvertToJPEG {
+    if shouldConvertToJPEG || originalContentType == "image/jpeg" || originalContentType == "image/jpg" {
         fmt.Println("✨ Compressing with state-of-the-art jpegli...")
         outputContentType = "image/jpeg"
         processedData, err = compressWithJpegli(imageToProcess)
@@ -214,7 +214,7 @@ func fallbackJPEGCompression(input []byte) ([]byte, error) {
 // compressWithOxipng uses `oxipng` for lossless PNG optimization.
 func compressWithOxipng(input []byte) ([]byte, error) {
     // Universal web-safe default: purely lossless, keeps display-critical metadata
-    cmd := exec.Command("oxipng", "-o", "4", "--strip", "safe", "-i", "0", "-")
+    cmd := exec.Command("oxipng", "-o", "4", "--strip", "safe", "-i", "off", "-")
 
     var out, stderr bytes.Buffer
     cmd.Stdin = bytes.NewReader(input)

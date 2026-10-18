@@ -14,9 +14,9 @@ import (
 )
 
 type R2Client struct {
-	client          *s3.Client
-	bucket          string
-	publicBaseURL   string
+	client        *s3.Client
+	bucket        string
+	publicBaseURL string
 }
 
 type UploadResult struct {
@@ -30,28 +30,25 @@ type UploadResult struct {
 func NewR2Client(ctx context.Context, accountID, accessKeyID, secretAccessKey, bucket, endpoint, publicBaseURL string) (*R2Client, error) {
 	// Create custom credentials
 	creds := credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")
-	
+
 	// Use accountID to build default endpoint if not provided
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
 	}
-	
+
 	// Create AWS config for R2
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithCredentialsProvider(creds),
-		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
-			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					URL: endpoint,
-				}, nil
-			})),
 		config.WithRegion("auto"), // R2 uses "auto" as region
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(endpoint)
+		options.UsePathStyle = true
+	})
 
 	return &R2Client{
 		client:        client,
@@ -66,27 +63,27 @@ func (r *R2Client) ObjectExists(ctx context.Context, key string) (bool, error) {
 		Bucket: aws.String(r.bucket),
 		Key:    aws.String(key),
 	})
-	
+
 	if err != nil {
 		// For 404 errors (object doesn't exist), return false without error
-		if strings.Contains(err.Error(), "404") || 
-		   strings.Contains(err.Error(), "NotFound") || 
-		   strings.Contains(err.Error(), "NoSuchKey") {
+		if strings.Contains(err.Error(), "404") ||
+			strings.Contains(err.Error(), "NotFound") ||
+			strings.Contains(err.Error(), "NoSuchKey") {
 			return false, nil
 		}
 		return false, err
 	}
-	
+
 	return true, nil
 }
 
 // Upload uploads data to R2 with the specified key
 func (r *R2Client) Upload(ctx context.Context, key string, data []byte, contentType string) (*UploadResult, error) {
 	input := &s3.PutObjectInput{
-		Bucket:      aws.String(r.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
+		Bucket:       aws.String(r.bucket),
+		Key:          aws.String(key),
+		Body:         bytes.NewReader(data),
+		ContentType:  aws.String(contentType),
 		CacheControl: aws.String("public, max-age=31536000, immutable"),
 		Metadata: map[string]string{
 			"source": "format.hackclub.com",

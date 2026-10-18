@@ -2,9 +2,6 @@
 
 import type { JSX } from 'react'
 import {
-  $createParagraphNode,
-  $createTextNode,
-  $insertNodes,
   DecoratorNode,
   DOMConversionMap,
   DOMConversionOutput,
@@ -173,7 +170,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
       imgProps.height = this.__height
     }
     
-    return <img {...imgProps} />
+    return <img {...imgProps} alt={this.__altText} />
   }
 }
 

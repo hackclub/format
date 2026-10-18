@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { authAPI } from '@/lib/api'
 import { User } from '@/types'
 
@@ -9,11 +9,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadUser()
-  }, [])
-
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -24,7 +20,11 @@ export function useAuth() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadUser()
+  }, [loadUser])
 
   const login = () => {
     window.location.href = authAPI.getLoginURL()

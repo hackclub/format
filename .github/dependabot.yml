@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # Frontend npm dependencies
-  - package-ecosystem: "npm"
+  # Frontend Bun dependencies
+  - package-ecosystem: "bun"
     directory: "/frontend"
     schedule:
       interval: "daily"
@@ -13,7 +13,6 @@ updates:
       next-ecosystem:
         patterns:
           - "next"
-          - "eslint-config-next"
           - "@next/*"
       react:
         patterns:
@@ -24,6 +23,14 @@ updates:
       types:
         patterns:
           - "@types/*"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript/*"
 
   # Backend Go modules
   - package-ecosystem: "gomod"
@@ -49,3 +56,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -11,7 +11,7 @@ dev-backend: ## Start backend development server with hot reload
 	cd backend && $$(go env GOPATH)/bin/air
 
 dev-frontend: ## Start frontend development server
-	cd frontend && npm run dev
+	cd frontend && bun run dev
 
 build: ## Build the application
 	@echo "Building application..."
@@ -21,29 +21,29 @@ build-backend: ## Build backend binary
 	cd backend && CGO_ENABLED=1 go build -o bin/server cmd/server/main.go
 
 build-frontend: ## Build frontend
-	cd frontend && npm run build
+	cd frontend && bun run build
 
 test: ## Run tests
 	@echo "Running tests..."
 	cd backend && go test ./...
-	cd frontend && npm test
+	cd frontend && bun run test
 
 check: ## Run type checking and linting
 	@echo "Running checks..."
 	cd backend && go vet ./...
 	cd backend && go mod tidy
-	cd frontend && npm run type-check
-	cd frontend && npm run lint
+	cd frontend && bun run type-check
+	cd frontend && bun run lint
 
 lint: ## Run linters
 	@echo "Running linters..."
 	cd backend && golangci-lint run || echo "golangci-lint not installed"
-	cd frontend && npm run lint
+	cd frontend && bun run lint
 
 install-deps: ## Install dependencies
 	@echo "Installing dependencies..."
 	cd backend && go mod download
-	cd frontend && npm install
+	cd frontend && bun install --frozen-lockfile
 
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
@@ -90,7 +90,7 @@ deploy-prod: ## Deploy to production
 security-scan: ## Run security scans
 	@echo "Running security scans..."
 	cd backend && gosec ./... || echo "gosec not installed"
-	cd frontend && npm audit
+	cd frontend && bun audit
 
 # Performance testing
 perf-test: ## Run performance tests

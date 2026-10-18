@@ -154,3 +154,8 @@ build-errors.log
 /test-*.go
 /test-*.html
 /test-*.json
+
+# TypeScript and browser test artifacts
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/

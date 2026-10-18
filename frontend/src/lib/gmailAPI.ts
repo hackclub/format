@@ -244,7 +244,7 @@ class GmailAPIClient {
 // Global instance
 export const gmailClient = new GmailAPIClient()
 
-export function parseGmailAttachmentUrl(url: string, context?: { filename?: string, alt?: string, imgTag?: string }): GmailAttachmentInfo | null {
+export function parseGmailAttachmentUrl(url: string, _context?: { filename?: string, alt?: string, imgTag?: string }): GmailAttachmentInfo | null {
   try {
     // Decode HTML entities first
     const decodedUrl = url
@@ -308,7 +308,7 @@ export async function convertGmailAttachmentsToDataUris(html: string): Promise<{
   let failed = 0
   
   for (const match of matches) {
-    const [fullImgTag, gmailUrl] = match
+    const [, gmailUrl] = match
     
     const attachmentInfo = parseGmailAttachmentUrl(gmailUrl)
     if (!attachmentInfo) {

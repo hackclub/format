@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "nextjs",
+    "jsx-a11y",
+    "import",
+    "oxc"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/components/ImageNode.tsx"
+      ],
+      "rules": {
+        "nextjs/no-img-element": "off"
+      }
+    },
+    {
+      "files": [
+        "src/components/EditorToolbar.tsx"
+      ],
+      "rules": {
+        "react/set-state-in-effect": "off",
+        "jsx-a11y/no-autofocus": "off"
+      }
+    },
+    {
+      "files": [
+        "src/hooks/useAuth.ts",
+        "src/hooks/useGmailAPI.ts"
+      ],
+      "rules": {
+        "react/set-state-in-effect": "off"
+      }
+    }
+  ]
+}

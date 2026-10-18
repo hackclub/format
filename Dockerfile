@@ -3,10 +3,10 @@ FROM dhi.io/bun:1-alpine3.24-dev AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,id=format-bun,target=/root/.bun/install/cache bun install --frozen-lockfile
 
 COPY frontend/ ./
-RUN bun run build
+RUN --mount=type=cache,id=format-next,target=/app/frontend/.next/cache bun run build
 
 FROM dhi.io/alpine-base:3.24-dev AS png-optimizer
 
@@ -25,7 +25,7 @@ RUN case "$TARGETARCH" in \
     cp "/tmp/oxipng-10.2.1-${target}-unknown-linux-musl/LICENSE" /opt/oxipng/share/licenses/oxipng/LICENSE
 
 # Build stage for backend
-FROM dhi.io/golang:1.27-alpine3.24-dev AS backend-builder
+FROM dhi.io/golang:1.27-alpine3.24-dev AS backend-base
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -35,19 +35,9 @@ RUN apk add --no-cache \
     vips-dev \
     oxipng
 
-WORKDIR /app/backend
-COPY backend/go.mod ./
-COPY backend/go.sum ./
-RUN go mod download
+FROM backend-base AS image-libraries
 
-COPY backend/ ./
-COPY --from=png-optimizer /opt/oxipng/bin/oxipng /usr/local/bin/oxipng
-RUN --mount=type=cache,id=format-go-build,target=/root/.cache/go-build go test ./...
-RUN --mount=type=cache,id=format-go-build,target=/root/.cache/go-build CGO_ENABLED=1 go build -o server ./cmd/server
-
-FROM backend-builder AS image-libraries
-
-ARG TARGETARCH
+ARG VIPS_BUILD_JOBS=8
 RUN apk add --no-cache build-base meson ninja xz pax-utils
 RUN wget -O /tmp/vips.tar.xz https://github.com/libvips/libvips/releases/download/v8.18.7/vips-8.18.7.tar.xz && \
     echo '5baaead3b0bb20ffdb9e9ff09aa9fda08620923df77b63b436654cb5e0b3bf94  /tmp/vips.tar.xz' | sha256sum -c - && \
@@ -55,20 +45,29 @@ RUN wget -O /tmp/vips.tar.xz https://github.com/libvips/libvips/releases/downloa
     meson setup /tmp/vips-build /tmp/vips-8.18.7 \
       --prefix=/opt/vips --libdir=lib --buildtype=release \
       -Dintrospection=disabled -Dcplusplus=false -Dmodules=disabled -Dexamples=false && \
-    meson compile -C /tmp/vips-build -j 2 && \
+    meson compile -C /tmp/vips-build -j "$(nproc | awk -v max="$VIPS_BUILD_JOBS" '{ print $1 < max ? $1 : max }')" && \
     meson install -C /tmp/vips-build
 COPY --from=png-optimizer /opt/oxipng /opt/vips
 
 ENV LD_LIBRARY_PATH=/opt/vips/lib
 ENV PATH=/opt/vips/bin:$PATH
-RUN --mount=type=cache,id=format-go-build,target=/root/.cache/go-build vips --version && oxipng --version && go test -count=1 ./internal/imageproc
 RUN scanelf --needed --nobanner --format '%n#p' --recursive /opt/vips/lib /opt/vips/bin | \
     tr ',' '\n' | sort -u | \
     awk 'system("test -e /opt/vips/lib/" $1) != 0 { print "so:" $1 }' > /opt/vips/runtime-dependencies
 
+FROM image-libraries AS backend-builder
+
+WORKDIR /app/backend
+COPY backend/go.mod backend/go.sum ./
+RUN --mount=type=cache,id=format-go-mod,target=/go/pkg/mod go mod download
+COPY backend/ ./
+RUN --mount=type=cache,id=format-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=format-go-build,target=/root/.cache/go-build \
+    go test ./... && CGO_ENABLED=1 go build -o server ./cmd/server
+
 FROM dhi.io/alpine-base:3.24 AS runtime-base
 
-FROM backend-builder AS runtime-dependencies
+FROM backend-base AS runtime-dependencies
 COPY --from=runtime-base / /runtime/
 COPY --from=image-libraries /opt/vips/runtime-dependencies /tmp/runtime-dependencies
 RUN cp -a /etc/apk/keys/. /runtime/etc/apk/keys/ && \
